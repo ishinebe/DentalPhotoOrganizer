@@ -291,15 +291,32 @@ function Import() {
   const [files, setFiles] = useState<LocalImageFile[]>([]);
   const [isSelectingFolder, setIsSelectingFolder] = useState(false);
   const [result, setResult] = useState<ImportPhotosResult | null>(null);
+  const isElectronApiConnected = typeof window.electronAPI?.selectImageFolder === "function";
 
+  const canSelectFolder = isElectronApiConnected && !isSelectingFolder && status !== "取込中";
   const canImport = files.length > 0 && status !== "取込中" && status !== "Supabase未設定";
 
   const handleSelectFolder = async () => {
+    const electronAPI = window.electronAPI;
+
+    if (!electronAPI) {
+      setStatus("取込失敗");
+      setResult({
+        status: "error",
+        targetCount: 0,
+        insertedCount: 0,
+        skippedCount: 0,
+        failedCount: 1,
+        message: "Electron API未接続のためフォルダ選択を実行できません。Electronウィンドウで起動してください"
+      });
+      return;
+    }
+
     setIsSelectingFolder(true);
     setResult(null);
 
     try {
-      const selection = await window.dentalPhotoOrganizer?.selectImageFolder();
+      const selection = await electronAPI.selectImageFolder();
 
       if (!selection || selection.canceled) {
         setStatus("未選択");
@@ -362,9 +379,21 @@ function Import() {
             <span>選択フォルダ</span>
             <strong>{folderPath ?? "未選択"}</strong>
           </div>
-          <button type="button" onClick={handleSelectFolder} disabled={isSelectingFolder || status === "取込中"}>
+          <button type="button" onClick={handleSelectFolder} disabled={!canSelectFolder}>
             {isSelectingFolder ? "選択中" : "フォルダ選択"}
           </button>
+        </div>
+
+        <div className={isElectronApiConnected ? "api-diagnostic connected" : "api-diagnostic disconnected"}>
+          <span className={isElectronApiConnected ? "status-dot ready" : "status-dot danger"} />
+          <div>
+            <strong>{isElectronApiConnected ? "Electron API接続済み" : "Electron API未接続"}</strong>
+            <p>
+              {isElectronApiConnected
+                ? "preload 経由で window.electronAPI.selectImageFolder を利用できます"
+                : "ブラウザ単体ではフォルダ選択を実行できません。Electronウィンドウで起動してください"}
+            </p>
+          </div>
         </div>
 
         <div className="import-actions">

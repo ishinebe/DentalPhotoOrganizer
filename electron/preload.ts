@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
 
-contextBridge.exposeInMainWorld("dentalPhotoOrganizer", {
-  appName: "DentalPhotoOrganizer",
-  selectImageFolder: () => ipcRenderer.invoke("dialog:select-image-folder")
+contextBridge.exposeInMainWorld("electronAPI", {
+  selectImageFolder: () => ipcRenderer.invoke("select-image-folder")
 });

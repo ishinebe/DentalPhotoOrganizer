@@ -8,8 +8,7 @@ export type ImageFolderSelectionResult = {
 
 declare global {
   interface Window {
-    dentalPhotoOrganizer?: {
-      appName: string;
+    electronAPI?: {
       selectImageFolder: () => Promise<ImageFolderSelectionResult>;
     };
   }

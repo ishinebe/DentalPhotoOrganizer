@@ -2,6 +2,7 @@
 
 Electron + React + TypeScript による Windows デスクトップアプリの MVP 骨組みです。
 Phase 2-D1 では Import 画面からローカル画像フォルダを選択し、画像ファイル本体は変更せず、メタデータのみを Supabase の `photos` テーブルへ登録できるようにしました。
+Electron preload では `window.electronAPI.selectImageFolder()` を公開し、React 側はこの API 経由でのみフォルダ選択を実行します。
 
 ## 現在の実装範囲
 
@@ -11,6 +12,7 @@ Phase 2-D1 では Import 画面からローカル画像フォルダを選択し�
 - Dashboard の読み込み中、取得成功、取得失敗、Supabase未設定の状態表示
 - Dashboard の再読み込みボタン
 - Import 画面のフォルダ選択
+- Import 画面の Electron API 接続診断
 - Import 画面の対象画像ファイル一覧表示
 - Import 画面から `photos` テーブルへのメタデータ登録
 - `file_hash` による重複スキップ
@@ -27,6 +29,7 @@ Phase 2-D1 では Import 画面からローカル画像フォルダを選択し�
 
 Import 画面では、Electron の main process 経由でローカルフォルダを選択します。
 React 側から直接ファイルシステムを操作しません。
+Electron ウィンドウ内では `window.electronAPI` が定義され、ブラウザ単体では未接続として表示されます。
 
 対象拡張子:
 
@@ -67,6 +70,8 @@ Electron 側で取得する情報:
 
 Supabase が未設定の場合、取込開始時に「Supabase未設定」と表示し、アプリはクラッシュしません。
 現時点では Supabase Storage 連携は行いません。
+
+Electron API が未接続の場合は「Electron API未接続」と表示し、フォルダ選択ボタンを無効化します。
 
 ## Dashboard 統計
 

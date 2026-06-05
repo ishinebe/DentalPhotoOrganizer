@@ -397,6 +397,10 @@ h3 {
   background: #17a66a;
 }
 
+.status-dot.danger {
+  background: #d92d20;
+}
+
 .pulse-dot {
   background: #1d7ed0;
   box-shadow: 0 0 0 6px rgba(29, 126, 208, 0.15);
@@ -448,6 +452,39 @@ h3 {
 .device-box span {
   color: #667085;
   font-size: 0.86rem;
+}
+
+.api-diagnostic {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid #d8e3ee;
+  border-radius: 8px;
+  background: #f8fbfe;
+}
+
+.api-diagnostic.disconnected {
+  border-color: #f1b8b1;
+  background: #fff8f6;
+}
+
+.api-diagnostic strong,
+.api-diagnostic p {
+  display: block;
+  margin: 0;
+}
+
+.api-diagnostic strong {
+  color: #1d2939;
+  font-size: 0.92rem;
+}
+
+.api-diagnostic p {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 0.82rem;
 }
 
 .import-actions {

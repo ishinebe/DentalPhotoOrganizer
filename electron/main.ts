@@ -9,6 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isDev = process.env.NODE_ENV !== "production" && !app.isPackaged;
+const preloadPath = path.join(__dirname, "preload.js");
 const imageMimeTypes = new Map([
   [".jpg", "image/jpeg"],
   [".jpeg", "image/jpeg"],
@@ -32,7 +33,7 @@ function createWindow() {
     title: "DentalPhotoOrganizer",
     backgroundColor: "#f5f7fb",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -62,7 +63,7 @@ void app.whenReady().then(() => {
 });
 
 function registerIpcHandlers() {
-  ipcMain.handle("dialog:select-image-folder", async () => {
+  ipcMain.handle("select-image-folder", async () => {
     const result = await dialog.showOpenDialog({
       title: "画像フォルダを選択",
       properties: ["openDirectory"]
