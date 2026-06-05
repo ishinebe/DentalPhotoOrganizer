@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
+import { existsSync } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +11,7 @@ const __dirname = path.dirname(__filename);
 
 const isDev = process.env.NODE_ENV !== "production" && !app.isPackaged;
 const preloadPath = path.join(__dirname, "preload.js");
+console.log("PRELOAD PATH", preloadPath, "exists:", existsSync(preloadPath));
 const imageMimeTypes = new Map([
   [".jpg", "image/jpeg"],
   [".jpeg", "image/jpeg"],
@@ -38,6 +40,8 @@ function createWindow() {
       nodeIntegration: false
     }
   });
+
+  mainWindow.webContents.openDevTools();
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);

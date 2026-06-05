@@ -291,6 +291,7 @@ function Import() {
   const [files, setFiles] = useState<LocalImageFile[]>([]);
   const [isSelectingFolder, setIsSelectingFolder] = useState(false);
   const [result, setResult] = useState<ImportPhotosResult | null>(null);
+  const electronApiType = typeof window.electronAPI;
   const isElectronApiConnected = typeof window.electronAPI?.selectImageFolder === "function";
 
   const canSelectFolder = isElectronApiConnected && !isSelectingFolder && status !== "取込中";
@@ -388,6 +389,7 @@ function Import() {
           <span className={isElectronApiConnected ? "status-dot ready" : "status-dot danger"} />
           <div>
             <strong>{isElectronApiConnected ? "Electron API接続済み" : "Electron API未接続"}</strong>
+            <small>Electron API type: {electronApiType}</small>
             <p>
               {isElectronApiConnected
                 ? "preload 経由で window.electronAPI.selectImageFolder を利用できます"
