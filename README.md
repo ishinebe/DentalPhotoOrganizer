@@ -1,8 +1,9 @@
-# DentalPhotoOrganizer Phase 2-D1
+# DentalPhotoOrganizer Phase 2-E
 
 Electron + React + TypeScript による Windows デスクトップアプリの MVP 骨組みです。
 Phase 2-D1 では Import 画面からローカル画像フォルダを選択し、画像ファイル本体は変更せず、メタデータのみを Supabase の `photos` テーブルへ登録できるようにしました。
 Electron preload では `window.electronAPI.selectImageFolder()` を公開し、React 側はこの API 経由でのみフォルダ選択を実行します。
+Phase 2-E では Review 画面を Supabase の `photos` テーブルに接続し、レビュー待ち写真の確認、メタデータ保存、承認更新を行える土台を追加しました。
 
 ## 現在の実装範囲
 
@@ -16,14 +17,56 @@ Electron preload では `window.electronAPI.selectImageFolder()` を公開し、
 - Import 画面の対象画像ファイル一覧表示
 - Import 画面から `photos` テーブルへのメタデータ登録
 - `file_hash` による重複スキップ
-- 患者グループ、サムネイル、メタデータ編集の 3 カラム Review UI
+- Supabase の `photos` 実データを表示する 3 カラム Review UI
+- Review 画面の pending 写真一覧取得
+- Review 画面のメタデータ保存
+- Review 画面の承認処理
 - ダミー検索条件を持つ Search UI
 - 取込元、保存先、レビュー必須設定、アプリ情報の Settings UI
 - `src/lib/supabase.ts` による Supabase クライアント初期化
 - `src/lib/photoStats.ts` による Dashboard 統計取得
 - `src/lib/importPhotos.ts` による Import 登録処理
+- `src/lib/reviewPhotos.ts` による Review 取得・保存・承認処理
 - `supabase/schema.sql` による Supabase DB スキーマ定義
 - `supabase/seed.sql` による開発用シードデータ
+
+## Review 画面
+
+Review 画面は `photos` テーブルから `review_status = 'pending'` の写真を `imported_at` の新しい順で最大100件取得します。
+
+左カラムにはレビュー待ち写真一覧を表示します。
+
+- `original_filename`
+- `imported_at`
+- `review_status`
+- `file_size`
+
+中央カラムには選択中写真の詳細を表示します。
+
+- `original_filename`
+- `original_path`
+- `file_hash`
+- `mime_type`
+- `file_size`
+- `imported_at`
+- `review_status`
+- `export_status`
+
+ローカル画像プレビューは現時点では未実装です。元画像ファイルは移動・コピーせず、`original_path` で参照します。
+
+右カラムでは以下の DB メタデータのみ編集できます。
+
+- `provisional_patient_id`
+- `doctor_name`
+- `photographer_name`
+- `notes`
+
+保存時は `reviewed_at` に現在時刻を入れます。
+承認時は `review_status = 'approved'`、`export_status = 'ready_for_export'`、`reviewed_at`、`approved_at` を更新します。
+
+`original_filename`、`original_path`、`file_hash` は編集不可です。患者IDはファイル名へ埋め込みません。
+
+現時点では監査ログ書き込みは実装していません。将来的に承認・修正履歴を `audit_logs` に保存する予定です。
 
 ## Import 画面
 
@@ -134,6 +177,8 @@ Supabase の環境変数が未設定の場合は、Dashboard は「Supabase未�
 ## 未実装
 
 - Supabase Storage
+- ローカル画像プレビュー
+- サムネイル生成
 - 画像コピー
 - 画像移動
 - 画像リネーム
@@ -143,8 +188,10 @@ Supabase の環境変数が未設定の場合は、Dashboard は「Supabase未�
 - AI分類
 - 自動患者振り分け
 - photo_groups作成
-- Review画面の実データ化
+- photo_groups 自動作成
 - Search画面の実検索
+- audit_logs への書き込み
+- エクスポート処理
 - 認証
 - RLS
 

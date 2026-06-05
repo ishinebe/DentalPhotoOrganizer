@@ -18,11 +18,27 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
 import { importPhotoMetadata, type ImportPhotosResult, type LocalImageFile } from "./lib/importPhotos";
+import {
+  approveReviewPhoto,
+  fetchPendingReviewPhotos,
+  type ReviewPhoto,
+  type ReviewPhotoForm,
+  updateReviewPhotoMetadata
+} from "./lib/reviewPhotos";
 import { getSupabaseConnectionStatus } from "./lib/supabase";
 
 type View = "dashboard" | "import" | "review" | "search" | "settings";
 type ImportStatus = "未選択" | "フォルダ選択済み" | "対象ファイルなし" | "取込中" | "取込完了" | "取込失敗" | "Supabase未設定";
 type SupabaseStatus = "checking" | "success" | "failed" | "not-configured";
+type ReviewLoadStatus = "読み込み中" | "データなし" | "取得失敗" | "表示中" | "Supabase未設定";
+type ReviewActionStatus =
+  | "待機中"
+  | "保存中"
+  | "保存成功"
+  | "保存失敗"
+  | "承認中"
+  | "承認成功"
+  | "承認失敗";
 
 const emptyStats = {
   totalPhotos: 0,
@@ -60,6 +76,13 @@ const metadata = {
   doctor: "Dr. Nakamura",
   photographer: "M. Tanaka",
   status: "レビュー待ち"
+};
+
+const emptyReviewForm: ReviewPhotoForm = {
+  provisional_patient_id: "",
+  doctor_name: "",
+  photographer_name: "",
+  notes: ""
 };
 
 function App() {
@@ -100,8 +123,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 2-C</span>
-          <strong>Supabase dashboard stats</strong>
+          <span>Phase 2-E</span>
+          <strong>Supabase review workflow</strong>
         </div>
       </aside>
 
@@ -489,85 +512,274 @@ function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function formatDateTime(value: string | null) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
 function Review() {
-  const [selectedPatient, setSelectedPatient] = useState(patients[0]);
+  const [photos, setPhotos] = useState<ReviewPhoto[]>([]);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [form, setForm] = useState<ReviewPhotoForm>(emptyReviewForm);
+  const [loadStatus, setLoadStatus] = useState<ReviewLoadStatus>("読み込み中");
+  const [actionStatus, setActionStatus] = useState<ReviewActionStatus>("待機中");
+  const [message, setMessage] = useState("レビュー待ち写真を読み込んでいます");
+
+  const selectedPhoto = photos.find((photo) => photo.id === selectedPhotoId) ?? photos[0] ?? null;
+
+  const loadPhotos = useCallback(async () => {
+    setLoadStatus("読み込み中");
+    setActionStatus("待機中");
+    setMessage("レビュー待ち写真を読み込んでいます");
+
+    const result = await fetchPendingReviewPhotos();
+
+    if (result.status === "not-configured") {
+      setPhotos([]);
+      setSelectedPhotoId(null);
+      setForm(emptyReviewForm);
+      setLoadStatus("Supabase未設定");
+      setMessage(result.message);
+      return;
+    }
+
+    if (result.status === "error") {
+      setPhotos([]);
+      setSelectedPhotoId(null);
+      setForm(emptyReviewForm);
+      setLoadStatus("取得失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    setPhotos(result.photos);
+    setSelectedPhotoId(result.photos[0]?.id ?? null);
+    setLoadStatus(result.photos.length > 0 ? "表示中" : "データなし");
+    setMessage(result.photos.length > 0 ? "レビュー待ち写真を表示しています" : "レビュー待ち写真はありません");
+  }, []);
+
+  useEffect(() => {
+    void loadPhotos();
+  }, [loadPhotos]);
+
+  useEffect(() => {
+    if (!selectedPhoto) {
+      setForm(emptyReviewForm);
+      return;
+    }
+
+    setForm({
+      provisional_patient_id: selectedPhoto.provisional_patient_id ?? "",
+      doctor_name: selectedPhoto.doctor_name ?? "",
+      photographer_name: selectedPhoto.photographer_name ?? "",
+      notes: selectedPhoto.notes ?? ""
+    });
+  }, [selectedPhoto]);
+
+  const updateFormValue = (field: keyof ReviewPhotoForm, value: string) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!selectedPhoto) {
+      return;
+    }
+
+    setActionStatus("保存中");
+    setMessage("メタデータを保存しています");
+
+    const result = await updateReviewPhotoMetadata(selectedPhoto.id, form);
+
+    if (result.status !== "success" || !result.photo) {
+      setActionStatus("保存失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    setPhotos((current) => current.map((photo) => (photo.id === result.photo?.id ? result.photo : photo)));
+    setActionStatus("保存成功");
+    setMessage(result.message);
+  };
+
+  const handleApprove = async () => {
+    if (!selectedPhoto) {
+      return;
+    }
+
+    setActionStatus("承認中");
+    setMessage("写真を承認しています");
+
+    const result = await approveReviewPhoto(selectedPhoto.id);
+
+    if (result.status !== "success") {
+      setActionStatus("承認失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    const remainingPhotos = photos.filter((photo) => photo.id !== selectedPhoto.id);
+    setPhotos(remainingPhotos);
+    setSelectedPhotoId(remainingPhotos[0]?.id ?? null);
+    setLoadStatus(remainingPhotos.length > 0 ? "表示中" : "データなし");
+    setActionStatus("承認成功");
+    setMessage(result.message);
+  };
+
+  const isBusy = actionStatus === "保存中" || actionStatus === "承認中" || loadStatus === "読み込み中";
 
   return (
     <div className="review-layout">
       <aside className="patient-column">
         <div className="column-title">
-          <h2>患者グループ</h2>
-          <span>{patients.length}件</span>
+          <h2>写真一覧</h2>
+          <span>{photos.length}件</span>
         </div>
-        <div className="patient-list">
-          {patients.map((patient) => (
+        <div className={`review-status ${loadStatus === "取得失敗" ? "error" : ""}`}>
+          <strong>{loadStatus}</strong>
+          <span>{message}</span>
+        </div>
+        <button className="review-refresh-button" type="button" onClick={loadPhotos} disabled={isBusy}>
+          <RefreshCw size={16} />
+          再読み込み
+        </button>
+        <div className="patient-list review-photo-list">
+          {photos.map((photo) => (
             <button
-              key={patient.id}
-              className={selectedPatient.id === patient.id ? "patient-item active" : "patient-item"}
-              onClick={() => setSelectedPatient(patient)}
+              key={photo.id}
+              className={selectedPhoto?.id === photo.id ? "patient-item active" : "patient-item"}
+              onClick={() => setSelectedPhotoId(photo.id)}
               type="button"
             >
-              <strong>{patient.name}</strong>
-              <span>{patient.id}</span>
+              <strong>{photo.original_filename}</strong>
+              <span>{formatDateTime(photo.imported_at)}</span>
               <em>
-                {patient.count}枚 / {patient.status}
+                {photo.review_status} / {formatFileSize(photo.file_size ?? 0)}
               </em>
             </button>
           ))}
+          {photos.length === 0 && (
+            <div className="empty-result compact">
+              <ClipboardCheck size={24} />
+              <span>{loadStatus === "読み込み中" ? "読み込み中" : "レビュー待ち写真はありません"}</span>
+            </div>
+          )}
         </div>
       </aside>
 
       <section className="thumbnail-column">
         <div className="column-title">
-          <h2>サムネイル</h2>
-          <span>{selectedPatient.name}</span>
+          <h2>写真詳細</h2>
+          <span>{selectedPhoto ? selectedPhoto.review_status : "未選択"}</span>
         </div>
-        <div className="thumbnail-grid">
-          {thumbnails.map((label, index) => (
-            <button className={index === 0 ? "thumbnail active" : "thumbnail"} key={label} type="button">
-              <div className="thumbnail-preview">
-                <ImageIcon size={30} />
+        {selectedPhoto ? (
+          <div className="review-detail">
+            <div className="preview-placeholder">
+              <ImageIcon size={36} />
+              <strong>プレビューは次Phaseで実装予定</strong>
+              <span>元画像ファイルは移動・コピーせず original_path で参照します。</span>
+            </div>
+            <dl className="detail-list">
+              <div>
+                <dt>original_filename</dt>
+                <dd>{selectedPhoto.original_filename}</dd>
               </div>
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+              <div>
+                <dt>original_path</dt>
+                <dd>{selectedPhoto.original_path ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>file_hash</dt>
+                <dd>{selectedPhoto.file_hash ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>mime_type</dt>
+                <dd>{selectedPhoto.mime_type ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>file_size</dt>
+                <dd>{formatFileSize(selectedPhoto.file_size ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>imported_at</dt>
+                <dd>{formatDateTime(selectedPhoto.imported_at)}</dd>
+              </div>
+              <div>
+                <dt>review_status</dt>
+                <dd>{selectedPhoto.review_status}</dd>
+              </div>
+              <div>
+                <dt>export_status</dt>
+                <dd>{selectedPhoto.export_status}</dd>
+              </div>
+            </dl>
+          </div>
+        ) : (
+          <div className="empty-result">
+            <Database size={28} />
+            <span>写真を選択すると詳細が表示されます</span>
+          </div>
+        )}
       </section>
 
       <aside className="metadata-column">
         <div className="column-title">
           <h2>メタデータ編集</h2>
-          <span>仮データ</span>
+          <span>{actionStatus}</span>
         </div>
         <form className="metadata-form">
           <label>
-            患者ID
-            <input value={selectedPatient.id} readOnly />
+            provisional_patient_id
+            <input
+              value={form.provisional_patient_id}
+              onChange={(event) => updateFormValue("provisional_patient_id", event.target.value)}
+              disabled={!selectedPhoto || isBusy}
+              placeholder="例: P-240015"
+            />
           </label>
           <label>
-            撮影日
-            <input value={metadata.date} readOnly />
+            doctor_name
+            <input
+              value={form.doctor_name}
+              onChange={(event) => updateFormValue("doctor_name", event.target.value)}
+              disabled={!selectedPhoto || isBusy}
+              placeholder="例: Dr. Nakamura"
+            />
           </label>
           <label>
-            担当医
-            <input value={metadata.doctor} readOnly />
+            photographer_name
+            <input
+              value={form.photographer_name}
+              onChange={(event) => updateFormValue("photographer_name", event.target.value)}
+              disabled={!selectedPhoto || isBusy}
+              placeholder="例: M. Tanaka"
+            />
           </label>
           <label>
-            撮影者
-            <input value={metadata.photographer} readOnly />
+            notes
+            <textarea
+              value={form.notes}
+              onChange={(event) => updateFormValue("notes", event.target.value)}
+              disabled={!selectedPhoto || isBusy}
+              placeholder="確認メモ"
+            />
           </label>
-          <label>
-            レビュー状態
-            <select defaultValue={metadata.status}>
-              <option>レビュー待ち</option>
-              <option>確認中</option>
-              <option>承認済み</option>
-            </select>
-          </label>
-          <button className="primary-button approve-button" type="button">
+          <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedPhoto || isBusy}>
+            保存
+          </button>
+          <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedPhoto || isBusy}>
             <CheckCircle2 size={18} />
             承認
           </button>
+          <p className="review-action-message">{message}</p>
         </form>
       </aside>
     </div>
@@ -644,7 +856,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.4.0 Phase 2-D1</dd>
+            <dd>0.5.0 Phase 2-E</dd>
           </div>
           <div>
             <dt>構成</dt>
