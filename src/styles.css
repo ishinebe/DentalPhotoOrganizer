@@ -186,6 +186,7 @@ button {
 }
 
 .metric-card,
+.dashboard-status,
 .supabase-card,
 .wide-panel,
 .import-panel,
@@ -207,6 +208,49 @@ button {
   gap: 16px;
   min-height: 138px;
   padding: 22px;
+}
+
+.dashboard-status {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 104px;
+  padding: 20px 22px;
+}
+
+.dashboard-status span,
+.dashboard-status strong,
+.dashboard-status p {
+  display: block;
+  margin: 0;
+}
+
+.dashboard-status span {
+  color: #667085;
+  font-size: 0.86rem;
+}
+
+.dashboard-status strong {
+  margin-top: 4px;
+  color: #101828;
+  font-size: 1.25rem;
+}
+
+.dashboard-status p {
+  margin-top: 5px;
+  color: #475467;
+}
+
+.dashboard-status.error {
+  border-color: #f1b8b1;
+  background: #fff8f6;
+}
+
+.dashboard-status.not-configured {
+  border-color: #b8d7f4;
+  background: #f5faff;
 }
 
 .supabase-card {

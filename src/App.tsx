@@ -6,6 +6,7 @@ import {
   Gauge,
   HardDriveDownload,
   Image as ImageIcon,
+  RefreshCw,
   Search,
   Settings,
   ShieldAlert,
@@ -14,12 +15,20 @@ import {
   Wifi,
   WifiOff
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
 import { getSupabaseConnectionStatus } from "./lib/supabase";
 
 type View = "dashboard" | "import" | "review" | "search" | "settings";
 type ImportStatus = "待機中" | "取込準備完了" | "取込中";
 type SupabaseStatus = "checking" | "success" | "failed" | "not-configured";
+
+const emptyStats = {
+  totalPhotos: 0,
+  pendingReviews: 0,
+  importedToday: 0,
+  approvedPhotos: 0
+};
 
 const navItems: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "dashboard", label: "Dashboard", icon: Gauge },
@@ -90,8 +99,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 2-A</span>
-          <strong>Supabase connection scaffold</strong>
+          <span>Phase 2-C</span>
+          <strong>Supabase dashboard stats</strong>
         </div>
       </aside>
 
@@ -122,36 +131,71 @@ function App() {
 function Dashboard() {
   const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatus>("checking");
   const [supabaseMessage, setSupabaseMessage] = useState("接続状態を確認しています");
+  const [statsResult, setStatsResult] = useState<DashboardStatsResult>({
+    status: "loading",
+    stats: emptyStats,
+    message: "統計情報を読み込んでいます"
+  });
 
-  useEffect(() => {
-    let ignore = false;
+  const loadDashboardData = useCallback(async () => {
+    setSupabaseStatus("checking");
+    setSupabaseMessage("接続状態を確認しています");
+    setStatsResult({
+      status: "loading",
+      stats: emptyStats,
+      message: "統計情報を読み込んでいます"
+    });
 
-    async function checkConnection() {
-      const result = await getSupabaseConnectionStatus();
+    const [connectionResult, photoStatsResult] = await Promise.all([
+      getSupabaseConnectionStatus(),
+      fetchDashboardPhotoStats()
+    ]);
 
-      if (ignore) {
-        return;
-      }
-
-      setSupabaseStatus(result.status);
-      setSupabaseMessage(result.message);
-    }
-
-    void checkConnection();
-
-    return () => {
-      ignore = true;
-    };
+    setSupabaseStatus(connectionResult.status);
+    setSupabaseMessage(connectionResult.message);
+    setStatsResult(photoStatsResult);
   }, []);
 
+  useEffect(() => {
+    void loadDashboardData();
+  }, [loadDashboardData]);
+
   const cards = [
-    { label: "総画像数", value: "12,480", icon: ImageIcon, hint: "保存済み写真" },
-    { label: "レビュー待ち件数", value: "36", icon: ClipboardCheck, hint: "要確認グループ" },
-    { label: "本日の取込件数", value: "128", icon: HardDriveDownload, hint: "2026-06-05" }
+    { label: "総画像数", value: statsResult.stats.totalPhotos, icon: ImageIcon, hint: "photos 全件" },
+    {
+      label: "レビュー待ち件数",
+      value: statsResult.stats.pendingReviews,
+      icon: ClipboardCheck,
+      hint: "review_status = pending"
+    },
+    {
+      label: "本日の取込件数",
+      value: statsResult.stats.importedToday,
+      icon: HardDriveDownload,
+      hint: "今日の0:00以降"
+    },
+    {
+      label: "承認済み件数",
+      value: statsResult.stats.approvedPhotos,
+      icon: CheckCircle2,
+      hint: "review_status = approved"
+    }
   ];
 
   return (
     <div className="dashboard-grid">
+      <section className={`dashboard-status ${statsResult.status}`}>
+        <div>
+          <span>Dashboard統計</span>
+          <strong>{getStatsStatusLabel(statsResult.status)}</strong>
+          <p>{statsResult.message}</p>
+        </div>
+        <button className="primary-button" type="button" onClick={loadDashboardData}>
+          <RefreshCw size={18} />
+          再読み込み
+        </button>
+      </section>
+
       {cards.map((card) => {
         const Icon = card.icon;
         return (
@@ -161,7 +205,7 @@ function Dashboard() {
             </div>
             <div>
               <p>{card.label}</p>
-              <strong>{card.value}</strong>
+              <strong>{card.value.toLocaleString()}</strong>
               <span>{card.hint}</span>
             </div>
           </article>
@@ -173,15 +217,28 @@ function Dashboard() {
       <section className="wide-panel">
         <div>
           <h2>本日の概要</h2>
-          <p>午前診療分の画像が取込済みです。レビュー待ちの患者グループを確認してください。</p>
+          <p>Dashboard の数値は Supabase の photos テーブルから取得しています。0件の場合も正常な状態として表示します。</p>
         </div>
         <div className="status-row">
           <span className="status-dot ready" />
-          <span>システム状態: 正常</span>
+          <span>元画像は不変、人間レビュー後に承認</span>
         </div>
       </section>
     </div>
   );
+}
+
+function getStatsStatusLabel(status: DashboardStatsResult["status"]) {
+  switch (status) {
+    case "loading":
+      return "読み込み中";
+    case "success":
+      return "取得成功";
+    case "error":
+      return "取得失敗";
+    case "not-configured":
+      return "Supabase未設定";
+  }
 }
 
 function SupabaseConnectionCard({ status, message }: { status: SupabaseStatus; message: string }) {
@@ -433,7 +490,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.2.0 Phase 2-A</dd>
+            <dd>0.3.0 Phase 2-C</dd>
           </div>
           <div>
             <dt>構成</dt>

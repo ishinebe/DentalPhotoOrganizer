@@ -1,8 +1,8 @@
 {
   "name": "dental-photo-organizer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "DentalPhotoOrganizer Phase2-A Supabase connection scaffold",
+  "description": "DentalPhotoOrganizer Phase2-C Supabase dashboard stats",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {
