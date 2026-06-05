@@ -4,3 +4,72 @@ photo_groups
 photo_group_items
 staff
 audit_logs
+
+# DB Schema
+
+## import_batches
+- id
+- imported_at
+- source_device
+- source_path
+- total_images
+- status
+- created_at
+
+## photos
+- id
+- import_batch_id
+- original_filename
+- original_path
+- file_hash
+- taken_at
+- image_width
+- image_height
+- review_status
+- created_at
+
+## photo_groups
+- id
+- import_batch_id
+- patient_id
+- shooting_date
+- doctor_id
+- photographer_id
+- confidence_score
+- needs_review
+- review_status
+- reviewer_id
+- reviewed_at
+- approved_at
+- export_status
+- created_at
+
+## photo_group_items
+- id
+- photo_group_id
+- photo_id
+- sort_order
+- image_type
+- confidence_score
+- outlier_score
+- needs_review
+- needs_review_reason
+- created_at
+
+## staff
+- id
+- name
+- role
+- department
+- is_active
+- created_at
+
+## audit_logs
+- id
+- action
+- target_type
+- target_id
+- before_value
+- after_value
+- user_id
+- created_at
