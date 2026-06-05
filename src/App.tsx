@@ -17,10 +17,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
+import { importPhotoMetadata, type ImportPhotosResult, type LocalImageFile } from "./lib/importPhotos";
 import { getSupabaseConnectionStatus } from "./lib/supabase";
 
 type View = "dashboard" | "import" | "review" | "search" | "settings";
-type ImportStatus = "待機中" | "取込準備完了" | "取込中";
+type ImportStatus = "未選択" | "フォルダ選択済み" | "対象ファイルなし" | "取込中" | "取込完了" | "取込失敗" | "Supabase未設定";
 type SupabaseStatus = "checking" | "success" | "failed" | "not-configured";
 
 const emptyStats = {
@@ -285,7 +286,65 @@ function SupabaseConnectionCard({ status, message }: { status: SupabaseStatus; m
 }
 
 function Import() {
-  const [status, setStatus] = useState<ImportStatus>("待機中");
+  const [status, setStatus] = useState<ImportStatus>("未選択");
+  const [folderPath, setFolderPath] = useState<string | null>(null);
+  const [files, setFiles] = useState<LocalImageFile[]>([]);
+  const [isSelectingFolder, setIsSelectingFolder] = useState(false);
+  const [result, setResult] = useState<ImportPhotosResult | null>(null);
+
+  const canImport = files.length > 0 && status !== "取込中" && status !== "Supabase未設定";
+
+  const handleSelectFolder = async () => {
+    setIsSelectingFolder(true);
+    setResult(null);
+
+    try {
+      const selection = await window.dentalPhotoOrganizer?.selectImageFolder();
+
+      if (!selection || selection.canceled) {
+        setStatus("未選択");
+        setFolderPath(null);
+        setFiles([]);
+        return;
+      }
+
+      setFolderPath(selection.folderPath);
+      setFiles(selection.files);
+      setStatus(selection.files.length > 0 ? "フォルダ選択済み" : "対象ファイルなし");
+    } catch {
+      setStatus("取込失敗");
+      setResult({
+        status: "error",
+        targetCount: 0,
+        insertedCount: 0,
+        skippedCount: 0,
+        failedCount: 1,
+        message: "フォルダ選択または画像一覧取得に失敗しました"
+      });
+    } finally {
+      setIsSelectingFolder(false);
+    }
+  };
+
+  const handleStartImport = async () => {
+    if (files.length === 0) {
+      setStatus("対象ファイルなし");
+      return;
+    }
+
+    setStatus("取込中");
+    setResult(null);
+
+    const importResult = await importPhotoMetadata(files);
+    setResult(importResult);
+
+    if (importResult.status === "not-configured") {
+      setStatus("Supabase未設定");
+      return;
+    }
+
+    setStatus(importResult.status === "success" ? "取込完了" : "取込失敗");
+  };
 
   return (
     <div className="import-layout">
@@ -293,28 +352,62 @@ function Import() {
         <div className="panel-heading">
           <HardDriveDownload size={24} />
           <div>
-            <h2>SDカード取込</h2>
-            <p>実ファイル操作なしのダミー取込画面です。</p>
+            <h2>ローカル画像メタデータ取込</h2>
+            <p>元画像ファイルはコピー・移動・リネームせず、参照情報のみ登録します。</p>
           </div>
         </div>
 
         <div className="device-box">
           <div>
-            <span>検出デバイス</span>
-            <strong>SD Card Reader - Drive E:</strong>
+            <span>選択フォルダ</span>
+            <strong>{folderPath ?? "未選択"}</strong>
           </div>
-          <button type="button" onClick={() => setStatus("取込準備完了")}>
-            接続確認
+          <button type="button" onClick={handleSelectFolder} disabled={isSelectingFolder || status === "取込中"}>
+            {isSelectingFolder ? "選択中" : "フォルダ選択"}
           </button>
         </div>
 
         <div className="import-actions">
-          <button className="primary-button" type="button" onClick={() => setStatus("取込中")}>
+          <button className="primary-button" type="button" onClick={handleStartImport} disabled={!canImport}>
             取込開始
           </button>
-          <button type="button" onClick={() => setStatus("待機中")}>
+          <button
+            type="button"
+            onClick={() => {
+              setStatus("未選択");
+              setFolderPath(null);
+              setFiles([]);
+              setResult(null);
+            }}
+            disabled={status === "取込中"}
+          >
             リセット
           </button>
+        </div>
+
+        <div className="file-list-panel">
+          <div className="column-title">
+            <h2>対象画像ファイル</h2>
+            <span>{files.length}件</span>
+          </div>
+          {files.length === 0 ? (
+            <div className="empty-result compact">
+              <ImageIcon size={24} />
+              <span>jpg / jpeg / png が見つかるとここに表示されます</span>
+            </div>
+          ) : (
+            <div className="file-list">
+              {files.map((file) => (
+                <div className="file-row" key={file.fileHash}>
+                  <div>
+                    <strong>{file.originalFilename}</strong>
+                    <span>{file.originalPath}</span>
+                  </div>
+                  <em>{formatFileSize(file.fileSize)}</em>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -325,14 +418,44 @@ function Import() {
           <strong>{status}</strong>
         </div>
         <ul className="process-list">
-          <li>SDカード検出</li>
-          <li>画像一覧取得</li>
-          <li>保存先確認</li>
-          <li>取込キュー作成</li>
+          <li>Electron経由でフォルダ選択</li>
+          <li>jpg / jpeg / png を抽出</li>
+          <li>SHA-256 file_hash を計算</li>
+          <li>photos テーブルへメタデータ登録</li>
         </ul>
+        <div className="import-result">
+          <h3>取込結果</h3>
+          <dl>
+            <div>
+              <dt>対象件数</dt>
+              <dd>{result?.targetCount ?? files.length}</dd>
+            </div>
+            <div>
+              <dt>登録成功</dt>
+              <dd>{result?.insertedCount ?? 0}</dd>
+            </div>
+            <div>
+              <dt>重複スキップ</dt>
+              <dd>{result?.skippedCount ?? 0}</dd>
+            </div>
+            <div>
+              <dt>失敗</dt>
+              <dd>{result?.failedCount ?? 0}</dd>
+            </div>
+          </dl>
+          <p>{result?.message ?? "取込開始後に結果が表示されます"}</p>
+        </div>
       </aside>
     </div>
   );
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024)).toLocaleString()} KB`;
+  }
+
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function Review() {
@@ -490,7 +613,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.3.0 Phase 2-C</dd>
+            <dd>0.4.0 Phase 2-D1</dd>
           </div>
           <div>
             <dt>構成</dt>

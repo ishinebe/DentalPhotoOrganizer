@@ -1,5 +1,6 @@
-import { contextBridge } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("dentalPhotoOrganizer", {
-  appName: "DentalPhotoOrganizer"
+  appName: "DentalPhotoOrganizer",
+  selectImageFolder: () => ipcRenderer.invoke("dialog:select-image-folder")
 });

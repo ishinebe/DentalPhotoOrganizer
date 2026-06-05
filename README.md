@@ -1,7 +1,7 @@
-# DentalPhotoOrganizer Phase 2-C
+# DentalPhotoOrganizer Phase 2-D1
 
 Electron + React + TypeScript による Windows デスクトップアプリの MVP 骨組みです。
-Phase 2-C では Dashboard の統計値を Supabase の `photos` テーブルから取得するようにしました。
+Phase 2-D1 では Import 画面からローカル画像フォルダを選択し、画像ファイル本体は変更せず、メタデータのみを Supabase の `photos` テーブルへ登録できるようにしました。
 
 ## 現在の実装範囲
 
@@ -10,14 +10,63 @@ Phase 2-C では Dashboard の統計値を Supabase の `photos` テーブルか
 - Dashboard の Supabase 接続状態表示
 - Dashboard の読み込み中、取得成功、取得失敗、Supabase未設定の状態表示
 - Dashboard の再読み込みボタン
-- SDカード取込を想定した Import UI
+- Import 画面のフォルダ選択
+- Import 画面の対象画像ファイル一覧表示
+- Import 画面から `photos` テーブルへのメタデータ登録
+- `file_hash` による重複スキップ
 - 患者グループ、サムネイル、メタデータ編集の 3 カラム Review UI
 - ダミー検索条件を持つ Search UI
 - 取込元、保存先、レビュー必須設定、アプリ情報の Settings UI
 - `src/lib/supabase.ts` による Supabase クライアント初期化
 - `src/lib/photoStats.ts` による Dashboard 統計取得
+- `src/lib/importPhotos.ts` による Import 登録処理
 - `supabase/schema.sql` による Supabase DB スキーマ定義
 - `supabase/seed.sql` による開発用シードデータ
+
+## Import 画面
+
+Import 画面では、Electron の main process 経由でローカルフォルダを選択します。
+React 側から直接ファイルシステムを操作しません。
+
+対象拡張子:
+
+- `.jpg`
+- `.jpeg`
+- `.png`
+
+拡張子の大文字小文字は区別しません。
+
+Electron 側で取得する情報:
+
+- ファイル名
+- フルパス
+- ファイルサイズ
+- MIME type
+- SHA-256 `file_hash`
+
+取込開始時は `photos` テーブルへ以下のメタデータのみ登録します。
+
+- `original_filename`
+- `original_path`
+- `file_hash`
+- `file_size`
+- `mime_type`
+- `imported_at`
+- `review_status = 'pending'`
+- `export_status = 'not_exported'`
+
+元画像ファイルに対して以下は行いません。
+
+- コピーしない
+- 移動しない
+- リネームしない
+- 削除しない
+- 画像加工しない
+
+同じ `file_hash` がすでに `photos` に存在する場合は重複登録せず、取込結果で「重複スキップ」として集計します。
+
+Supabase が未設定の場合、取込開始時に「Supabase未設定」と表示し、アプリはクラッシュしません。
+現時点では Supabase Storage 連携は行いません。
 
 ## Dashboard 統計
 
@@ -79,18 +128,20 @@ Supabase の環境変数が未設定の場合は、Dashboard は「Supabase未�
 
 ## 未実装
 
-- Import画面の実処理
-- Review画面のDB編集
-- Search画面の実検索
 - Supabase Storage
-- 認証
-- RLS
+- 画像コピー
+- 画像移動
+- 画像リネーム
+- 画像削除
+- 画像加工
 - OCR
 - AI分類
-- 自動グループ化
-- 画像処理
-- 実ファイル操作
-- 自動フォルダ作成
+- 自動患者振り分け
+- photo_groups作成
+- Review画面の実データ化
+- Search画面の実検索
+- 認証
+- RLS
 
 ## 環境変数
 

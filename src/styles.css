@@ -33,6 +33,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 260px 1fr;
@@ -493,6 +498,94 @@ h3 {
   color: #475467;
 }
 
+.file-list-panel {
+  margin-top: 22px;
+}
+
+.file-list {
+  display: grid;
+  gap: 9px;
+  max-height: 340px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #d8e3ee;
+  border-radius: 8px;
+  background: #f8fbfe;
+}
+
+.file-row strong,
+.file-row span {
+  display: block;
+}
+
+.file-row strong {
+  color: #1d2939;
+  font-size: 0.92rem;
+}
+
+.file-row span {
+  max-width: 580px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #667085;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-row em {
+  flex: 0 0 auto;
+  color: #475467;
+  font-size: 0.82rem;
+  font-style: normal;
+}
+
+.import-result {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #edf2f7;
+}
+
+.import-result dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.import-result dl div {
+  padding: 10px;
+  border: 1px solid #d8e3ee;
+  border-radius: 8px;
+  background: #f8fbfe;
+}
+
+.import-result dt {
+  color: #667085;
+  font-size: 0.78rem;
+}
+
+.import-result dd {
+  margin: 3px 0 0;
+  color: #101828;
+  font-size: 1.18rem;
+  font-weight: 700;
+}
+
+.import-result p {
+  margin: 14px 0 0;
+  color: #475467;
+  font-size: 0.86rem;
+}
+
 .review-layout {
   display: grid;
   grid-template-columns: 270px minmax(420px, 1fr) 330px;
@@ -650,6 +743,10 @@ select:focus {
   border: 1px dashed #cbd8e5;
   border-radius: 8px;
   background: #f8fbfe;
+}
+
+.empty-result.compact {
+  min-height: 160px;
 }
 
 .toggle-row {
