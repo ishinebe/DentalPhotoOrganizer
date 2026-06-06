@@ -31,10 +31,6 @@ export type ReviewGroupPhoto = {
   imported_at: string | null;
   review_status: "pending" | "reviewing" | "approved" | "rejected";
   export_status: "not_exported" | "ready_for_export" | "exported" | "export_failed";
-  provisional_patient_id: string | null;
-  doctor_name: string | null;
-  photographer_name: string | null;
-  notes: string | null;
   reviewed_at: string | null;
   approved_at: string | null;
   sort_order: number | null;
@@ -95,10 +91,6 @@ const photoColumns = [
   "imported_at",
   "review_status",
   "export_status",
-  "provisional_patient_id",
-  "doctor_name",
-  "photographer_name",
-  "notes",
   "reviewed_at",
   "approved_at"
 ].join(",");
@@ -382,7 +374,6 @@ async function ensurePendingPhotosHaveGroups() {
     const { data: groupData, error: groupError } = await supabase
       .from("photo_groups")
       .insert({
-        patient_id: photo.provisional_patient_id,
         review_status: "pending",
         export_status: "not_exported"
       })

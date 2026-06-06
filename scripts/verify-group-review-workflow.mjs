@@ -57,10 +57,6 @@ const photoColumns = [
   "imported_at",
   "review_status",
   "export_status",
-  "provisional_patient_id",
-  "doctor_name",
-  "photographer_name",
-  "notes",
   "reviewed_at",
   "approved_at"
 ].join(",");
@@ -137,8 +133,7 @@ async function insertUngroupedPendingPhoto() {
       mime_type: "image/jpeg",
       imported_at: new Date().toISOString(),
       review_status: "pending",
-      export_status: "not_exported",
-      notes: "Phase3-C ungrouped pending verification row"
+      export_status: "not_exported"
     })
     .select(photoColumns)
     .single();
@@ -154,7 +149,6 @@ async function createOnePhotoGroupForPhoto(photo) {
   const { data: group, error: groupError } = await supabase
     .from("photo_groups")
     .insert({
-      patient_id: photo.provisional_patient_id,
       review_status: "pending",
       export_status: "not_exported"
     })
