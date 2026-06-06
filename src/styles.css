@@ -857,6 +857,47 @@ textarea:focus {
   object-fit: contain;
 }
 
+.group-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.group-photo-card {
+  display: grid;
+  gap: 6px;
+  min-height: 96px;
+  padding: 10px;
+  border: 1px solid #d9e3ef;
+  border-radius: 8px;
+  color: #344054;
+  background: #ffffff;
+  text-align: left;
+}
+
+.group-photo-card:hover,
+.group-photo-card.active {
+  border-color: #2474c9;
+  background: #eef6ff;
+}
+
+.group-photo-card strong,
+.group-photo-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-photo-card strong {
+  color: #12283f;
+  font-size: 0.84rem;
+}
+
+.group-photo-card span {
+  color: #667085;
+  font-size: 0.76rem;
+}
+
 .preview-placeholder {
   display: grid;
   place-items: center;

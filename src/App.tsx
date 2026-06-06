@@ -19,12 +19,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
 import { importPhotoMetadata, type ImportPhotosResult, type LocalImageFile } from "./lib/importPhotos";
 import {
-  approveReviewPhoto,
-  fetchPendingReviewPhotos,
-  type ReviewPhoto,
-  type ReviewPhotoForm,
-  updateReviewPhotoMetadata
-} from "./lib/reviewPhotos";
+  completeReviewGroup,
+  fetchPendingReviewGroups,
+  fetchReviewGroupPhotos,
+  type ReviewGroup,
+  type ReviewGroupForm,
+  type ReviewGroupPhoto,
+  updateReviewGroupMetadata
+} from "./lib/reviewGroups";
 import { getSupabaseConnectionStatus } from "./lib/supabase";
 
 type View = "dashboard" | "import" | "review" | "search" | "settings";
@@ -79,7 +81,7 @@ const metadata = {
   status: "レビュー待ち"
 };
 
-const emptyReviewForm: ReviewPhotoForm = {
+const emptyReviewForm: ReviewGroupForm = {
   provisional_patient_id: "",
   doctor_name: "",
   photographer_name: "",
@@ -124,8 +126,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 2-E</span>
-          <strong>Supabase review workflow</strong>
+          <span>Phase 3-B</span>
+          <strong>Group review workflow</strong>
         </div>
       </aside>
 
@@ -524,29 +526,38 @@ function formatDateTime(value: string | null) {
   }).format(new Date(value));
 }
 
+function getPhotoSlotLabel(index: number) {
+  const labels = ["正面", "左側", "右側", "上顎", "下顎"];
+  return labels[index] ?? `写真${index + 1}`;
+}
+
 function Review() {
-  const [photos, setPhotos] = useState<ReviewPhoto[]>([]);
+  const [groups, setGroups] = useState<ReviewGroup[]>([]);
+  const [groupPhotos, setGroupPhotos] = useState<ReviewGroupPhoto[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
-  const [form, setForm] = useState<ReviewPhotoForm>(emptyReviewForm);
+  const [form, setForm] = useState<ReviewGroupForm>(emptyReviewForm);
   const [loadStatus, setLoadStatus] = useState<ReviewLoadStatus>("読み込み中");
   const [actionStatus, setActionStatus] = useState<ReviewActionStatus>("待機中");
-  const [message, setMessage] = useState("レビュー待ち写真を読み込んでいます");
+  const [message, setMessage] = useState("レビュー待ちグループを読み込んでいます");
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("未選択");
   const [previewMessage, setPreviewMessage] = useState("写真を選択するとプレビューを読み込みます");
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
 
-  const selectedPhoto = photos.find((photo) => photo.id === selectedPhotoId) ?? photos[0] ?? null;
+  const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
+  const selectedPhoto = groupPhotos.find((photo) => photo.id === selectedPhotoId) ?? groupPhotos[0] ?? null;
 
-  const loadPhotos = useCallback(async () => {
+  const loadGroups = useCallback(async () => {
     setLoadStatus("読み込み中");
     setActionStatus("待機中");
-    setMessage("レビュー待ち写真を読み込んでいます");
+    setMessage("レビュー待ちグループを読み込んでいます");
 
-    const result = await fetchPendingReviewPhotos();
+    const result = await fetchPendingReviewGroups();
 
     if (result.status === "not-configured") {
-      setPhotos([]);
-      setSelectedPhotoId(null);
+      setGroups([]);
+      setGroupPhotos([]);
+      setSelectedGroupId(null);
       setForm(emptyReviewForm);
       setLoadStatus("Supabase未設定");
       setMessage(result.message);
@@ -554,37 +565,71 @@ function Review() {
     }
 
     if (result.status === "error") {
-      setPhotos([]);
-      setSelectedPhotoId(null);
+      setGroups([]);
+      setGroupPhotos([]);
+      setSelectedGroupId(null);
       setForm(emptyReviewForm);
       setLoadStatus("取得失敗");
       setMessage(result.message);
       return;
     }
 
-    setPhotos(result.photos);
-    setSelectedPhotoId(result.photos[0]?.id ?? null);
-    setLoadStatus(result.photos.length > 0 ? "表示中" : "データなし");
-    setMessage(result.photos.length > 0 ? "レビュー待ち写真を表示しています" : "レビュー待ち写真はありません");
+    setGroups(result.groups);
+    setSelectedGroupId(result.groups[0]?.id ?? null);
+    setLoadStatus(result.groups.length > 0 ? "表示中" : "データなし");
+    setMessage(result.groups.length > 0 ? "レビュー待ちグループを表示しています" : "レビュー待ちグループはありません");
   }, []);
 
   useEffect(() => {
-    void loadPhotos();
-  }, [loadPhotos]);
+    void loadGroups();
+  }, [loadGroups]);
 
   useEffect(() => {
-    if (!selectedPhoto) {
+    let isCurrent = true;
+
+    setGroupPhotos([]);
+    setSelectedPhotoId(null);
+
+    if (!selectedGroup) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void fetchReviewGroupPhotos(selectedGroup.id).then((result) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      if (result.status !== "success") {
+        setGroupPhotos([]);
+        setSelectedPhotoId(null);
+        setMessage(result.message);
+        return;
+      }
+
+      setGroupPhotos(result.photos);
+      setSelectedPhotoId(result.photos[0]?.id ?? null);
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedGroup]);
+
+  useEffect(() => {
+    if (!selectedGroup) {
       setForm(emptyReviewForm);
       return;
     }
 
     setForm({
-      provisional_patient_id: selectedPhoto.provisional_patient_id ?? "",
-      doctor_name: selectedPhoto.doctor_name ?? "",
-      photographer_name: selectedPhoto.photographer_name ?? "",
-      notes: selectedPhoto.notes ?? ""
+      provisional_patient_id: selectedGroup.provisional_patient_id ?? "",
+      doctor_name: selectedGroup.doctor_name ?? "",
+      photographer_name: selectedGroup.photographer_name ?? "",
+      notes: selectedGroup.notes ?? ""
     });
-  }, [selectedPhoto]);
+  }, [selectedGroup]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -651,7 +696,7 @@ function Review() {
     };
   }, [selectedPhoto]);
 
-  const updateFormValue = (field: keyof ReviewPhotoForm, value: string) => {
+  const updateFormValue = (field: keyof ReviewGroupForm, value: string) => {
     setForm((current) => ({
       ...current,
       [field]: value
@@ -659,35 +704,35 @@ function Review() {
   };
 
   const handleSave = async () => {
-    if (!selectedPhoto) {
+    if (!selectedGroup) {
       return;
     }
 
     setActionStatus("保存中");
-    setMessage("メタデータを保存しています");
+    setMessage("レビュー内容を保存しています");
 
-    const result = await updateReviewPhotoMetadata(selectedPhoto.id, form);
+    const result = await updateReviewGroupMetadata(selectedGroup.id, form);
 
-    if (result.status !== "success" || !result.photo) {
+    if (result.status !== "success" || !result.group) {
       setActionStatus("保存失敗");
       setMessage(result.message);
       return;
     }
 
-    setPhotos((current) => current.map((photo) => (photo.id === result.photo?.id ? result.photo : photo)));
+    setGroups((current) => current.map((group) => (group.id === result.group?.id ? result.group : group)));
     setActionStatus("保存成功");
     setMessage(result.message);
   };
 
   const handleApprove = async () => {
-    if (!selectedPhoto) {
+    if (!selectedGroup) {
       return;
     }
 
     setActionStatus("承認中");
-    setMessage("写真を承認しています");
+    setMessage("グループをレビュー完了にしています");
 
-    const result = await approveReviewPhoto(selectedPhoto.id);
+    const result = await completeReviewGroup(selectedGroup.id);
 
     if (result.status !== "success") {
       setActionStatus("承認失敗");
@@ -695,10 +740,12 @@ function Review() {
       return;
     }
 
-    const remainingPhotos = photos.filter((photo) => photo.id !== selectedPhoto.id);
-    setPhotos(remainingPhotos);
-    setSelectedPhotoId(remainingPhotos[0]?.id ?? null);
-    setLoadStatus(remainingPhotos.length > 0 ? "表示中" : "データなし");
+    const remainingGroups = groups.filter((group) => group.id !== selectedGroup.id);
+    setGroups(remainingGroups);
+    setSelectedGroupId(remainingGroups[0]?.id ?? null);
+    setGroupPhotos([]);
+    setSelectedPhotoId(null);
+    setLoadStatus(remainingGroups.length > 0 ? "表示中" : "データなし");
     setActionStatus("承認成功");
     setMessage(result.message);
   };
@@ -709,36 +756,38 @@ function Review() {
     <div className="review-layout">
       <aside className="patient-column">
         <div className="column-title">
-          <h2>写真一覧</h2>
-          <span>{photos.length}件</span>
+          <h2>グループ一覧</h2>
+          <span>{groups.length}件</span>
         </div>
         <div className={`review-status ${loadStatus === "取得失敗" ? "error" : ""}`}>
           <strong>{loadStatus}</strong>
           <span>{message}</span>
         </div>
-        <button className="review-refresh-button" type="button" onClick={loadPhotos} disabled={isBusy}>
+        <button className="review-refresh-button" type="button" onClick={loadGroups} disabled={isBusy}>
           <RefreshCw size={16} />
           再読み込み
         </button>
         <div className="patient-list review-photo-list">
-          {photos.map((photo) => (
+          {groups.map((group) => (
             <button
-              key={photo.id}
-              className={selectedPhoto?.id === photo.id ? "patient-item active" : "patient-item"}
-              onClick={() => setSelectedPhotoId(photo.id)}
+              key={group.id}
+              className={selectedGroup?.id === group.id ? "patient-item active" : "patient-item"}
+              onClick={() => setSelectedGroupId(group.id)}
               type="button"
             >
-              <strong>{photo.original_filename}</strong>
-              <span>{formatDateTime(photo.imported_at)}</span>
+              <strong>{group.group_label ?? "患者候補"}</strong>
+              <span>
+                {group.photo_count}枚 / {group.provisional_patient_id ?? "患者ID未設定"}
+              </span>
               <em>
-                {photo.review_status} / {formatFileSize(photo.file_size ?? 0)}
+                {group.review_status} / {formatDateTime(group.updated_at)}
               </em>
             </button>
           ))}
-          {photos.length === 0 && (
+          {groups.length === 0 && (
             <div className="empty-result compact">
               <ClipboardCheck size={24} />
-              <span>{loadStatus === "読み込み中" ? "読み込み中" : "レビュー待ち写真はありません"}</span>
+              <span>{loadStatus === "読み込み中" ? "読み込み中" : "レビュー待ちグループはありません"}</span>
             </div>
           )}
         </div>
@@ -746,14 +795,14 @@ function Review() {
 
       <section className="thumbnail-column">
         <div className="column-title">
-          <h2>写真詳細</h2>
-          <span>{selectedPhoto ? selectedPhoto.review_status : "未選択"}</span>
+          <h2>グループ内写真</h2>
+          <span>{selectedGroup ? `${groupPhotos.length}枚` : "未選択"}</span>
         </div>
-        {selectedPhoto ? (
+        {selectedGroup ? (
           <div className="review-detail">
             <div className={`preview-frame ${previewStatus === "表示中" ? "ready" : ""}`}>
               {previewStatus === "表示中" && previewDataUrl ? (
-                <img src={previewDataUrl} alt={selectedPhoto.original_filename} className="review-preview-image" />
+                <img src={previewDataUrl} alt={selectedPhoto?.original_filename ?? "preview"} className="review-preview-image" />
               ) : (
                 <div className="preview-placeholder">
                   <ImageIcon size={36} />
@@ -762,38 +811,58 @@ function Review() {
                 </div>
               )}
             </div>
+            <div className="group-photo-grid">
+              {groupPhotos.map((photo, index) => (
+                <button
+                  key={photo.id}
+                  className={selectedPhoto?.id === photo.id ? "group-photo-card active" : "group-photo-card"}
+                  type="button"
+                  onClick={() => setSelectedPhotoId(photo.id)}
+                >
+                  <ImageIcon size={18} />
+                  <strong>{getPhotoSlotLabel(index)}</strong>
+                  <span>{photo.original_filename}</span>
+                </button>
+              ))}
+              {groupPhotos.length === 0 && (
+                <div className="empty-result compact">
+                  <ImageIcon size={24} />
+                  <span>このグループには写真がありません</span>
+                </div>
+              )}
+            </div>
             <dl className="detail-list">
               <div>
                 <dt>original_filename</dt>
-                <dd>{selectedPhoto.original_filename}</dd>
+                <dd>{selectedPhoto?.original_filename ?? "-"}</dd>
               </div>
               <div>
                 <dt>original_path</dt>
-                <dd>{selectedPhoto.original_path ?? "-"}</dd>
+                <dd>{selectedPhoto?.original_path ?? "-"}</dd>
               </div>
               <div>
                 <dt>file_hash</dt>
-                <dd>{selectedPhoto.file_hash ?? "-"}</dd>
+                <dd>{selectedPhoto?.file_hash ?? "-"}</dd>
               </div>
               <div>
                 <dt>mime_type</dt>
-                <dd>{selectedPhoto.mime_type ?? "-"}</dd>
+                <dd>{selectedPhoto?.mime_type ?? "-"}</dd>
               </div>
               <div>
                 <dt>file_size</dt>
-                <dd>{formatFileSize(selectedPhoto.file_size ?? 0)}</dd>
+                <dd>{formatFileSize(selectedPhoto?.file_size ?? 0)}</dd>
               </div>
               <div>
                 <dt>imported_at</dt>
-                <dd>{formatDateTime(selectedPhoto.imported_at)}</dd>
+                <dd>{formatDateTime(selectedPhoto?.imported_at ?? null)}</dd>
               </div>
               <div>
                 <dt>review_status</dt>
-                <dd>{selectedPhoto.review_status}</dd>
+                <dd>{selectedPhoto?.review_status ?? "-"}</dd>
               </div>
               <div>
                 <dt>export_status</dt>
-                <dd>{selectedPhoto.export_status}</dd>
+                <dd>{selectedPhoto?.export_status ?? "-"}</dd>
               </div>
             </dl>
           </div>
@@ -807,7 +876,7 @@ function Review() {
 
       <aside className="metadata-column">
         <div className="column-title">
-          <h2>メタデータ編集</h2>
+          <h2>グループ情報</h2>
           <span>{actionStatus}</span>
         </div>
         <form className="metadata-form">
@@ -816,7 +885,7 @@ function Review() {
             <input
               value={form.provisional_patient_id}
               onChange={(event) => updateFormValue("provisional_patient_id", event.target.value)}
-              disabled={!selectedPhoto || isBusy}
+              disabled={!selectedGroup || isBusy}
               placeholder="例: P-240015"
             />
           </label>
@@ -825,7 +894,7 @@ function Review() {
             <input
               value={form.doctor_name}
               onChange={(event) => updateFormValue("doctor_name", event.target.value)}
-              disabled={!selectedPhoto || isBusy}
+              disabled={!selectedGroup || isBusy}
               placeholder="例: Dr. Nakamura"
             />
           </label>
@@ -834,7 +903,7 @@ function Review() {
             <input
               value={form.photographer_name}
               onChange={(event) => updateFormValue("photographer_name", event.target.value)}
-              disabled={!selectedPhoto || isBusy}
+              disabled={!selectedGroup || isBusy}
               placeholder="例: M. Tanaka"
             />
           </label>
@@ -843,16 +912,16 @@ function Review() {
             <textarea
               value={form.notes}
               onChange={(event) => updateFormValue("notes", event.target.value)}
-              disabled={!selectedPhoto || isBusy}
+              disabled={!selectedGroup || isBusy}
               placeholder="確認メモ"
             />
           </label>
-          <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedPhoto || isBusy}>
-            保存
+          <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
+            レビュー内容を保存
           </button>
-          <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedPhoto || isBusy}>
+          <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
             <CheckCircle2 size={18} />
-            承認
+            レビュー完了
           </button>
           <p className="review-action-message">{message}</p>
         </form>
@@ -931,7 +1000,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.5.0 Phase 2-E</dd>
+            <dd>0.5.0 Phase 3-B</dd>
           </div>
           <div>
             <dt>構成</dt>
