@@ -339,3 +339,10 @@ Verification coverage:
 - Confirms pending photo count returns to the pre-test value after completion
 
 The current MVP schema uses `provisional_patient_id`, `doctor_name`, and `photographer_name`. It does not define `patient_id`, `doctor_id`, or `photographer_id` columns yet.
+
+## Database Reference
+
+実装時のDBカラム参照は `docs/database_reference.md` を優先する。
+
+存在しないカラムを推測で使用しないこと。
+実DBスキーマとコードに差異がある場合は、実DBスキーマを優先する。
