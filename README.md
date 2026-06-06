@@ -278,3 +278,28 @@ Preview behavior:
 - Missing paths, unsupported extensions, read failures, and missing Electron API are shown as UI states
 
 This preview works only on the same PC where `original_path` points to an existing local file. Multi-device preview will require a future Storage or shared storage design.
+
+## Phase3-B Group-based review workflow
+
+Review now uses `photo_groups` and `photo_group_items` as the main review target instead of reviewing `photos` directly.
+
+Group review behavior:
+
+- Pending `photos` without `photo_group_items` are temporarily grouped as `1 photo = 1 group`
+- Group list is loaded from `photo_groups`
+- Group photo counts are calculated from `photo_group_items`
+- Selecting a group loads its photos through `photo_group_items`
+- Group metadata can be edited:
+  - `provisional_patient_id`
+  - `doctor_name`
+  - `photographer_name`
+  - `notes`
+- `レビュー内容を保存` updates the selected group and propagates metadata to its photos
+- `レビュー完了` updates the selected group and its photos to:
+  - `review_status = approved`
+  - `export_status = ready_for_export`
+  - `reviewed_at = now`
+  - `approved_at = now`
+- Dashboard counts continue to reflect `photos`, so completing a group reduces pending photo count and increases approved photo count
+
+This phase does not implement QR recognition, OCR, AI grouping, similarity detection, export, or Storage migration.
