@@ -150,7 +150,7 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
   return {
     status: "success",
     groups: groups
-      .filter((group) => visibleGroupIds.has(group.id))
+      .filter((group) => visibleGroupIds.has(group.id) && (memberships.counts.get(group.id) ?? 0) > 0)
       .map((group) => ({
         ...group,
         photo_count: memberships.counts.get(group.id) ?? 0
@@ -553,7 +553,7 @@ async function fetchFirstGroupItemForPhoto(photoId: string) {
   return {
     status: "success" as const,
     item: ((data ?? []) as unknown as GroupItemRow[])[0] ?? null,
-    message: "photo_group_items繧堤｢ｺ隱阪＠縺ｾ縺励◆"
+    message: "Checked photo_group_items"
   };
 }
 

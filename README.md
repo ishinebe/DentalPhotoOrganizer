@@ -418,6 +418,33 @@ alter table public.photo_group_items
   add constraint photo_group_items_photo_id_unique unique (photo_id);
 ```
 
+Check empty review groups:
+
+```sql
+select
+  pg.id,
+  pg.review_status,
+  pg.created_at,
+  count(pgi.photo_id) as photo_count
+from public.photo_groups pg
+left join public.photo_group_items pgi
+  on pgi.photo_group_id = pg.id
+group by pg.id, pg.review_status, pg.created_at
+having count(pgi.photo_id) = 0
+order by pg.created_at desc;
+```
+
+After manual confirmation, empty groups can be removed with:
+
+```sql
+delete from public.photo_groups pg
+where not exists (
+  select 1
+  from public.photo_group_items pgi
+  where pgi.photo_group_id = pg.id
+);
+```
+
 ## Database Reference
 
 実装時のDBカラム参照は `docs/database_reference.md` を優先する。
