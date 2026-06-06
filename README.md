@@ -346,6 +346,43 @@ Verification coverage:
 
 The real database uses `patient_id`, `doctor_id`, and `photographer_id` for `photo_groups`. Do not use `provisional_patient_id`, `doctor_name`, `photographer_name`, `notes`, `group_label`, or `updated_at` on `photo_groups`.
 
+## Phase3-C Manual group editing
+
+Review supports manual correction of group membership without changing original image files.
+
+Available operations:
+
+- Move the selected photo to another existing group
+- Split the selected photo into a new group
+- Merge the selected group into another group
+
+Implementation rules:
+
+- Only `photo_group_items.photo_group_id` is updated for membership changes
+- `photo_group_items.photo_id` remains unique
+- `photos.original_path`, `photos.file_hash`, and image files are never copied, moved, renamed, deleted, or edited
+- Empty groups are not shown in Review
+- Merge keeps the target group's metadata
+
+Manual verification in a configured Supabase environment:
+
+1. Import a folder with multiple images
+2. Open Review and select a group
+3. Select one photo and move it to another group
+4. Confirm the source and target group photo counts update after reload
+5. Select one photo and split it into a new group
+6. Confirm a new one-photo group appears
+7. Merge one group into another group
+8. Confirm the source group disappears from Review when it becomes empty
+9. Confirm this duplicate membership query returns no rows:
+
+```sql
+select photo_id, count(*) as group_item_count
+from photo_group_items
+group by photo_id
+having count(*) > 1;
+```
+
 ## Phase4-A Intake form code detection
 
 Import now scans supported local image files for QR codes before saving metadata to Supabase.

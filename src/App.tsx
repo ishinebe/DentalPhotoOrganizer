@@ -22,6 +22,9 @@ import {
   completeReviewGroup,
   fetchPendingReviewGroups,
   fetchReviewGroupPhotos,
+  mergeGroups,
+  movePhotoToGroup,
+  splitPhotoToNewGroup,
   type ReviewGroup,
   type ReviewGroupForm,
   type ReviewGroupPhoto,
@@ -40,7 +43,16 @@ type ReviewActionStatus =
   | "保存失敗"
   | "承認中"
   | "承認成功"
-  | "承認失敗";
+  | "承認失敗"
+  | "移動中"
+  | "移動成功"
+  | "移動失敗"
+  | "分離中"
+  | "分離成功"
+  | "分離失敗"
+  | "統合中"
+  | "統合成功"
+  | "統合失敗";
 type PreviewStatus = "未選択" | "読み込み中" | "表示中" | "読み込み失敗" | "未対応形式" | "Electron API未接続";
 
 const emptyStats = {
@@ -527,6 +539,11 @@ function formatDateTime(value: string | null) {
   }).format(new Date(value));
 }
 
+function formatGroupOption(group: ReviewGroup) {
+  const label = group.patient_id ? `患者候補 ${group.patient_id}` : `患者候補 ${group.id.slice(0, 8)}`;
+  return `${label} / ${group.photo_count}枚`;
+}
+
 function getPhotoSlotLabel(index: number) {
   const labels = ["正面", "左側", "右側", "上顎", "下顎"];
   return labels[index] ?? `写真${index + 1}`;
@@ -544,11 +561,17 @@ function Review() {
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("未選択");
   const [previewMessage, setPreviewMessage] = useState("写真を選択するとプレビューを読み込みます");
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
+  const [moveTargetGroupId, setMoveTargetGroupId] = useState("");
+  const [mergeTargetGroupId, setMergeTargetGroupId] = useState("");
 
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
   const selectedPhoto = groupPhotos.find((photo) => photo.id === selectedPhotoId) ?? groupPhotos[0] ?? null;
+  const otherGroups = useMemo(
+    () => (selectedGroup ? groups.filter((group) => group.id !== selectedGroup.id) : []),
+    [groups, selectedGroup]
+  );
 
-  const loadGroups = useCallback(async () => {
+  const loadGroups = useCallback(async (preferredGroupId?: string | null) => {
     setLoadStatus("読み込み中");
     setActionStatus("待機中");
     setMessage("レビュー待ちグループを読み込んでいます");
@@ -576,7 +599,11 @@ function Review() {
     }
 
     setGroups(result.groups);
-    setSelectedGroupId(result.groups[0]?.id ?? null);
+    const nextSelectedGroupId =
+      (preferredGroupId && result.groups.some((group) => group.id === preferredGroupId) ? preferredGroupId : null) ??
+      result.groups[0]?.id ??
+      null;
+    setSelectedGroupId(nextSelectedGroupId);
     setLoadStatus(result.groups.length > 0 ? "表示中" : "データなし");
     setMessage(result.groups.length > 0 ? "レビュー待ちグループを表示しています" : "レビュー待ちグループはありません");
   }, []);
@@ -631,6 +658,12 @@ function Review() {
       photographer_id: selectedGroup.photographer_id ?? ""
     });
   }, [selectedGroup]);
+
+  useEffect(() => {
+    const nextTargetGroupId = otherGroups[0]?.id ?? "";
+    setMoveTargetGroupId((current) => (current && otherGroups.some((group) => group.id === current) ? current : nextTargetGroupId));
+    setMergeTargetGroupId((current) => (current && otherGroups.some((group) => group.id === current) ? current : nextTargetGroupId));
+  }, [otherGroups]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -751,7 +784,90 @@ function Review() {
     setMessage(result.message);
   };
 
-  const isBusy = actionStatus === "保存中" || actionStatus === "承認中" || loadStatus === "読み込み中";
+  const handleMovePhoto = async () => {
+    if (!selectedPhoto || !moveTargetGroupId) {
+      return;
+    }
+
+    setActionStatus("移動中");
+    setMessage("写真を別グループへ移動しています");
+
+    const result = await movePhotoToGroup(selectedPhoto.id, moveTargetGroupId);
+
+    if (result.status !== "success" || !result.groupId) {
+      setActionStatus("移動失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    setActionStatus("移動成功");
+    setMessage(result.message);
+    setGroupPhotos([]);
+    setSelectedPhotoId(null);
+    await loadGroups(result.groupId);
+  };
+
+  const handleSplitPhoto = async () => {
+    if (!selectedPhoto) {
+      return;
+    }
+
+    setActionStatus("分離中");
+    setMessage("写真を新しいグループへ分離しています");
+
+    const result = await splitPhotoToNewGroup(selectedPhoto.id);
+
+    if (result.status !== "success" || !result.groupId) {
+      setActionStatus("分離失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    setActionStatus("分離成功");
+    setMessage(result.message);
+    setGroupPhotos([]);
+    setSelectedPhotoId(null);
+    await loadGroups(result.groupId);
+  };
+
+  const handleMergeGroup = async () => {
+    if (!selectedGroup || !mergeTargetGroupId) {
+      return;
+    }
+
+    const targetGroup = groups.find((group) => group.id === mergeTargetGroupId);
+    const targetLabel = targetGroup?.patient_id ?? targetGroup?.id.slice(0, 8) ?? mergeTargetGroupId.slice(0, 8);
+    const confirmed = window.confirm(`選択中グループを ${targetLabel} に統合します。よろしいですか？`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setActionStatus("統合中");
+    setMessage("グループを統合しています");
+
+    const result = await mergeGroups(selectedGroup.id, mergeTargetGroupId);
+
+    if (result.status !== "success" || !result.groupId) {
+      setActionStatus("統合失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    setActionStatus("統合成功");
+    setMessage(result.message);
+    setGroupPhotos([]);
+    setSelectedPhotoId(null);
+    await loadGroups(result.groupId);
+  };
+
+  const isBusy =
+    actionStatus === "保存中" ||
+    actionStatus === "承認中" ||
+    actionStatus === "移動中" ||
+    actionStatus === "分離中" ||
+    actionStatus === "統合中" ||
+    loadStatus === "読み込み中";
 
   return (
     <div className="review-layout">
@@ -764,7 +880,7 @@ function Review() {
           <strong>{loadStatus}</strong>
           <span>{message}</span>
         </div>
-        <button className="review-refresh-button" type="button" onClick={loadGroups} disabled={isBusy}>
+        <button className="review-refresh-button" type="button" onClick={() => void loadGroups()} disabled={isBusy}>
           <RefreshCw size={16} />
           再読み込み
         </button>
@@ -831,6 +947,38 @@ function Review() {
                   <span>このグループには写真がありません</span>
                 </div>
               )}
+            </div>
+            <div className="group-edit-panel">
+              <div className="group-edit-header">
+                <strong>手動グループ編集</strong>
+                <span>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</span>
+              </div>
+              <label>
+                移動先グループ
+                <select
+                  value={moveTargetGroupId}
+                  onChange={(event) => setMoveTargetGroupId(event.target.value)}
+                  disabled={!selectedPhoto || otherGroups.length === 0 || isBusy}
+                >
+                  {otherGroups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {formatGroupOption(group)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="group-edit-actions">
+                <button
+                  type="button"
+                  onClick={handleMovePhoto}
+                  disabled={!selectedPhoto || !moveTargetGroupId || isBusy}
+                >
+                  別グループへ移動
+                </button>
+                <button type="button" onClick={handleSplitPhoto} disabled={!selectedPhoto || isBusy}>
+                  新しいグループへ分離
+                </button>
+              </div>
             </div>
             <dl className="detail-list">
               <div>
@@ -925,6 +1073,30 @@ function Review() {
               placeholder="UUID"
             />
           </label>
+          <div className="group-merge-panel">
+            <label>
+              統合先グループ
+              <select
+                value={mergeTargetGroupId}
+                onChange={(event) => setMergeTargetGroupId(event.target.value)}
+                disabled={!selectedGroup || otherGroups.length === 0 || isBusy}
+              >
+                {otherGroups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {formatGroupOption(group)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="secondary-action-button"
+              type="button"
+              onClick={handleMergeGroup}
+              disabled={!selectedGroup || !mergeTargetGroupId || isBusy}
+            >
+              他グループと統合
+            </button>
+          </div>
           <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
             レビュー内容を保存
           </button>

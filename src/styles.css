@@ -898,6 +898,57 @@ textarea:focus {
   font-size: 0.76rem;
 }
 
+.group-edit-panel,
+.group-merge-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d9e3ef;
+  border-radius: 8px;
+  background: #f8fbfe;
+}
+
+.group-edit-header {
+  display: grid;
+  gap: 3px;
+}
+
+.group-edit-header strong {
+  color: #12283f;
+  font-size: 0.9rem;
+}
+
+.group-edit-header span {
+  overflow: hidden;
+  color: #667085;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-edit-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.group-edit-actions button,
+.secondary-action-button {
+  min-height: 38px;
+  border: 1px solid #cbd8e5;
+  border-radius: 8px;
+  color: #24527a;
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.group-edit-actions button:hover,
+.secondary-action-button:hover {
+  border-color: #2474c9;
+  color: #1265b4;
+  background: #eef6ff;
+}
+
 .preview-placeholder {
   display: grid;
   place-items: center;

@@ -61,6 +61,12 @@ export type ReviewGroupMutationResult = {
   message: string;
 };
 
+export type ReviewGroupEditResult = {
+  status: "success" | "error" | "not-configured";
+  groupId: string | null;
+  message: string;
+};
+
 const groupColumns = [
   "id",
   "import_batch_id",
@@ -493,6 +499,188 @@ async function fetchGroupPhotoMemberships(groupIds: string[]) {
   return {
     counts,
     items
+  };
+}
+
+export async function movePhotoToGroup(photoId: string, targetGroupId: string): Promise<ReviewGroupEditResult> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      status: "not-configured",
+      groupId: null,
+      message: "Supabase is not configured"
+    };
+  }
+
+  const membership = await fetchFirstGroupItemForPhoto(photoId);
+  if (membership.status === "error") {
+    return {
+      status: "error",
+      groupId: null,
+      message: membership.message
+    };
+  }
+
+  if (!membership.item) {
+    return {
+      status: "error",
+      groupId: null,
+      message: "Photo group membership was not found"
+    };
+  }
+
+  if (membership.item.photo_group_id === targetGroupId) {
+    return {
+      status: "success",
+      groupId: targetGroupId,
+      message: "Photo is already in the selected group"
+    };
+  }
+
+  const { error } = await supabase
+    .from("photo_group_items")
+    .update({
+      photo_group_id: targetGroupId,
+      sort_order: null
+    })
+    .eq("photo_id", photoId);
+
+  if (error) {
+    return {
+      status: "error",
+      groupId: null,
+      message: error.message
+    };
+  }
+
+  return {
+    status: "success",
+    groupId: targetGroupId,
+    message: "Photo moved to another group"
+  };
+}
+
+export async function splitPhotoToNewGroup(photoId: string): Promise<ReviewGroupEditResult> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      status: "not-configured",
+      groupId: null,
+      message: "Supabase is not configured"
+    };
+  }
+
+  const membership = await fetchFirstGroupItemForPhoto(photoId);
+  if (membership.status === "error") {
+    return {
+      status: "error",
+      groupId: null,
+      message: membership.message
+    };
+  }
+
+  if (!membership.item) {
+    return {
+      status: "error",
+      groupId: null,
+      message: "Photo group membership was not found"
+    };
+  }
+
+  const { data: groupData, error: groupError } = await supabase
+    .from("photo_groups")
+    .insert({
+      review_status: "pending",
+      export_status: "not_exported"
+    })
+    .select("id")
+    .single();
+
+  if (groupError) {
+    return {
+      status: "error",
+      groupId: null,
+      message: groupError.message
+    };
+  }
+
+  const newGroupId = (groupData as { id: string }).id;
+  const { error: itemError } = await supabase
+    .from("photo_group_items")
+    .update({
+      photo_group_id: newGroupId,
+      sort_order: 1
+    })
+    .eq("photo_id", photoId);
+
+  if (itemError) {
+    await deleteNewlyCreatedGroup(newGroupId);
+    return {
+      status: "error",
+      groupId: null,
+      message: itemError.message
+    };
+  }
+
+  return {
+    status: "success",
+    groupId: newGroupId,
+    message: "Photo split into a new group"
+  };
+}
+
+export async function mergeGroups(sourceGroupId: string, targetGroupId: string): Promise<ReviewGroupEditResult> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      status: "not-configured",
+      groupId: null,
+      message: "Supabase is not configured"
+    };
+  }
+
+  if (sourceGroupId === targetGroupId) {
+    return {
+      status: "error",
+      groupId: null,
+      message: "Select a different target group"
+    };
+  }
+
+  const photoIds = await fetchPhotoIdsForGroup(sourceGroupId);
+  if (photoIds.status === "error") {
+    return {
+      status: "error",
+      groupId: null,
+      message: photoIds.message
+    };
+  }
+
+  if (photoIds.ids.length === 0) {
+    return {
+      status: "error",
+      groupId: null,
+      message: "Source group has no photos"
+    };
+  }
+
+  const { error } = await supabase
+    .from("photo_group_items")
+    .update({
+      photo_group_id: targetGroupId,
+      sort_order: null
+    })
+    .eq("photo_group_id", sourceGroupId);
+
+  if (error) {
+    return {
+      status: "error",
+      groupId: null,
+      message: error.message
+    };
+  }
+
+  return {
+    status: "success",
+    groupId: targetGroupId,
+    message: "Groups merged"
   };
 }
 
