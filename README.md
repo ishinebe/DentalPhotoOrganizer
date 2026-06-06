@@ -540,3 +540,116 @@ where not exists (
 
 存在しないカラムを推測で使用しないこと。
 実DBスキーマとコードに差異がある場合は、実DBスキーマを優先する。
+
+# AI Assistant Development Notes
+
+This section is intended for AI coding assistants (ChatGPT, Gemini, Claude, Codex, etc.).
+
+## Project Purpose
+
+DentalPhotoOrganizer is a desktop application for organizing intraoral photographs in dental clinics.
+
+The software assists humans with:
+
+* Photo import
+* QR-based grouping
+* Review workflow
+* Metadata management
+* Export
+
+The software does NOT make final decisions.
+
+Human reviewers are always responsible for final approval.
+
+---
+
+## Current Architecture
+
+Current implementation intentionally prioritizes simplicity.
+
+Main files:
+
+* src/App.tsx
+* src/lib/importPhotos.ts
+* src/lib/photoStats.ts
+* src/lib/reviewGroups.ts
+* src/lib/reviewPhotos.ts
+* src/lib/supabase.ts
+* src/styles.css
+
+Most UI is currently implemented directly inside App.tsx.
+
+There is currently NO:
+
+* Redux
+* Zustand
+* Context-based global state
+* Complex component hierarchy
+
+Do not assume these structures exist.
+
+---
+
+## Review Workflow Philosophy
+
+The review screen is not intended as a generic "review" system.
+
+The user's actual task is:
+
+"Confirm that no photographs from another patient are mixed into the automatically grouped photo set."
+
+UI terminology should prioritize clinical usability over developer terminology.
+
+Preferred wording:
+
+* Review → 撮影セット確認
+* Pending → 確認待ち
+* Approved → 確認済み
+
+Avoid exposing internal workflow terminology when possible.
+
+---
+
+## Image Handling Rules
+
+Original image files must never be modified.
+
+The application must not:
+
+* Rename originals
+* Delete originals
+* Move originals
+* Overwrite originals
+
+All grouping and metadata management should be database-driven.
+
+---
+
+## Approval Philosophy
+
+AI only assists.
+
+AI may:
+
+* Suggest groups
+* Detect possible issues
+* Flag suspicious photos
+
+AI may NOT:
+
+* Automatically approve exports
+* Make final patient assignments
+
+Human reviewers remain responsible for final approval.
+
+---
+
+## Future Refactoring
+
+The current App.tsx may eventually be split into components.
+
+Before proposing large architectural changes, prioritize:
+
+1. Maintaining workflow stability
+2. Preserving review safety
+3. Minimizing disruption to existing functionality
