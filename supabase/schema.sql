@@ -1,6 +1,9 @@
 -- DentalPhotoOrganizer Phase 2-B
 -- Core database schema for local MVP development.
 -- Run this file in the Supabase SQL Editor.
+-- WARNING:
+-- This schema.sql is an old local MVP draft and does not fully match the current Supabase production schema.
+-- For implementation, refer to docs/database_reference.md as the source of truth.
 
 create extension if not exists pgcrypto;
 

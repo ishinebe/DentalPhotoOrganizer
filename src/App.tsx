@@ -82,11 +82,10 @@ const metadata = {
 };
 
 const emptyReviewForm: ReviewGroupForm = {
-  provisional_patient_id: "",
+  patient_id: "",
   shooting_date: "",
-  doctor_name: "",
-  photographer_name: "",
-  notes: ""
+  doctor_id: "",
+  photographer_id: ""
 };
 
 function App() {
@@ -625,11 +624,10 @@ function Review() {
     }
 
     setForm({
-      provisional_patient_id: selectedGroup.provisional_patient_id ?? "",
+      patient_id: selectedGroup.patient_id ?? "",
       shooting_date: selectedGroup.shooting_date ?? "",
-      doctor_name: selectedGroup.doctor_name ?? "",
-      photographer_name: selectedGroup.photographer_name ?? "",
-      notes: selectedGroup.notes ?? ""
+      doctor_id: selectedGroup.doctor_id ?? "",
+      photographer_id: selectedGroup.photographer_id ?? ""
     });
   }, [selectedGroup]);
 
@@ -777,12 +775,12 @@ function Review() {
               onClick={() => setSelectedGroupId(group.id)}
               type="button"
             >
-              <strong>{group.group_label ?? "患者候補"}</strong>
+              <strong>{group.patient_id ? `患者候補 ${group.patient_id}` : `患者候補 ${group.id.slice(0, 8)}`}</strong>
               <span>
-                {group.photo_count}枚 / {group.provisional_patient_id ?? "患者ID未設定"}
+                {group.photo_count}枚 / {group.patient_id ?? "患者ID未設定"}
               </span>
               <em>
-                {group.review_status} / {formatDateTime(group.updated_at)}
+                {group.review_status} / {formatDateTime(group.created_at)}
               </em>
             </button>
           ))}
@@ -883,10 +881,10 @@ function Review() {
         </div>
         <form className="metadata-form">
           <label>
-            provisional_patient_id
+            patient_id
             <input
-              value={form.provisional_patient_id}
-              onChange={(event) => updateFormValue("provisional_patient_id", event.target.value)}
+              value={form.patient_id}
+              onChange={(event) => updateFormValue("patient_id", event.target.value)}
               disabled={!selectedGroup || isBusy}
               placeholder="例: P-240015"
             />
@@ -901,30 +899,21 @@ function Review() {
             />
           </label>
           <label>
-            doctor_name
+            doctor_id
             <input
-              value={form.doctor_name}
-              onChange={(event) => updateFormValue("doctor_name", event.target.value)}
+              value={form.doctor_id}
+              onChange={(event) => updateFormValue("doctor_id", event.target.value)}
               disabled={!selectedGroup || isBusy}
-              placeholder="例: Dr. Nakamura"
+              placeholder="UUID"
             />
           </label>
           <label>
-            photographer_name
+            photographer_id
             <input
-              value={form.photographer_name}
-              onChange={(event) => updateFormValue("photographer_name", event.target.value)}
+              value={form.photographer_id}
+              onChange={(event) => updateFormValue("photographer_id", event.target.value)}
               disabled={!selectedGroup || isBusy}
-              placeholder="例: M. Tanaka"
-            />
-          </label>
-          <label>
-            notes
-            <textarea
-              value={form.notes}
-              onChange={(event) => updateFormValue("notes", event.target.value)}
-              disabled={!selectedGroup || isBusy}
-              placeholder="確認メモ"
+              placeholder="UUID"
             />
           </label>
           <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>

@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -22,26 +23,28 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 const runId = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
 const fileHash = `phase3c-group-review-${runId}`;
 const metadata = {
-  provisional_patient_id: `P-PHASE3C-${runId}`,
+  patient_id: `P-PHASE3C-${runId}`,
   shooting_date: new Date().toISOString().slice(0, 10),
-  doctor_name: "Dr. Phase3C",
-  photographer_name: "Verifier Phase3C",
-  notes: `Phase3-C group review verification ${runId}`
+  doctor_id: randomUUID(),
+  photographer_id: randomUUID()
 };
 
 const groupColumns = [
   "id",
-  "group_label",
-  "provisional_patient_id",
+  "import_batch_id",
+  "patient_id",
   "shooting_date",
-  "doctor_name",
-  "photographer_name",
+  "doctor_id",
+  "photographer_id",
+  "confidence_score",
+  "needs_review",
   "review_status",
   "export_status",
+  "reviewer_id",
   "reviewed_at",
   "approved_at",
-  "notes",
-  "updated_at"
+  "created_at",
+  "patient_uuid"
 ].join(",");
 
 const photoColumns = [
@@ -85,11 +88,10 @@ assertEqual(groupPhotos[0].id, insertedPhoto.id, "group photo id");
 console.log("Verified photo_group_items loads the child photo.");
 
 const savedGroup = await saveGroupMetadata(group.id);
-assertEqual(savedGroup.provisional_patient_id, metadata.provisional_patient_id, "group provisional_patient_id");
+assertEqual(savedGroup.patient_id, metadata.patient_id, "group patient_id");
 assertEqual(savedGroup.shooting_date, metadata.shooting_date, "group shooting_date");
-assertEqual(savedGroup.doctor_name, metadata.doctor_name, "group doctor_name");
-assertEqual(savedGroup.photographer_name, metadata.photographer_name, "group photographer_name");
-assertEqual(savedGroup.notes, metadata.notes, "group notes");
+assertEqual(savedGroup.doctor_id, metadata.doctor_id, "group doctor_id");
+assertEqual(savedGroup.photographer_id, metadata.photographer_id, "group photographer_id");
 assertPresent(savedGroup.reviewed_at, "group reviewed_at after save");
 console.log("Verified group metadata save fields.");
 
@@ -152,13 +154,9 @@ async function createOnePhotoGroupForPhoto(photo) {
   const { data: group, error: groupError } = await supabase
     .from("photo_groups")
     .insert({
-      group_label: `患者候補 ${photo.original_filename}`,
-      provisional_patient_id: photo.provisional_patient_id,
-      doctor_name: photo.doctor_name,
-      photographer_name: photo.photographer_name,
+      patient_id: photo.provisional_patient_id,
       review_status: "pending",
-      export_status: "not_exported",
-      notes: photo.notes
+      export_status: "not_exported"
     })
     .select(groupColumns)
     .single();
@@ -185,7 +183,7 @@ async function fetchPendingGroups() {
     .from("photo_groups")
     .select(groupColumns)
     .eq("review_status", "pending")
-    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(100);
 
   if (error) {

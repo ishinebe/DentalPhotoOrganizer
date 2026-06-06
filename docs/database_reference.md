@@ -20,6 +20,7 @@ Important known mismatches:
 - `photo_groups` uses `patient_id`, not `provisional_patient_id`.
 - `photo_groups` uses `doctor_id`, not `doctor_name`.
 - `photo_groups` uses `photographer_id`, not `photographer_name`.
+- `photo_groups` uses `created_at` for current ordering; do not use `updated_at`.
 - The current `supabase/schema.sql` is a legacy local MVP schema and does not fully match the real Supabase schema.
 - `docs/db_schema.md` was not present when this reference was created.
 
@@ -89,6 +90,7 @@ Important notes:
 - Use `patient_id`; do not use `provisional_patient_id` for `photo_groups` unless the real DB adds it.
 - Use `doctor_id`; do not use `doctor_name` for `photo_groups`.
 - Use `photographer_id`; do not use `photographer_name` for `photo_groups`.
+- Use `created_at` for group list ordering; do not use `updated_at`.
 - `supabase/schema.sql` currently lists legacy columns (`group_label`, `provisional_patient_id`, `doctor_name`, `photographer_name`, `notes`, `updated_at`) that are not confirmed in the real DB.
 - If notes are needed for group review, confirm whether real DB has `notes` or whether notes should be stored in `audit_logs`.
 

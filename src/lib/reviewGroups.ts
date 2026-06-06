@@ -2,19 +2,20 @@ import { hasSupabaseConfig, supabase } from "./supabase";
 
 export type ReviewGroup = {
   id: string;
-  group_label: string | null;
-  provisional_patient_id: string | null;
+  import_batch_id: string | null;
+  patient_id: string | null;
   shooting_date: string | null;
-  doctor_name: string | null;
-  photographer_name: string | null;
+  doctor_id: string | null;
+  photographer_id: string | null;
+  confidence_score: number | null;
+  needs_review: boolean | null;
   review_status: "pending" | "reviewing" | "approved" | "rejected";
   export_status: "not_exported" | "ready_for_export" | "exported" | "export_failed";
   reviewer_id: string | null;
   reviewed_at: string | null;
   approved_at: string | null;
-  notes: string | null;
   created_at: string | null;
-  updated_at: string | null;
+  patient_uuid: string | null;
   photo_count: number;
 };
 
@@ -38,11 +39,10 @@ export type ReviewGroupPhoto = {
 };
 
 export type ReviewGroupForm = {
-  provisional_patient_id: string;
+  patient_id: string;
   shooting_date: string;
-  doctor_name: string;
-  photographer_name: string;
-  notes: string;
+  doctor_id: string;
+  photographer_id: string;
 };
 
 export type ReviewGroupsResult = {
@@ -65,19 +65,20 @@ export type ReviewGroupMutationResult = {
 
 const groupColumns = [
   "id",
-  "group_label",
-  "provisional_patient_id",
+  "import_batch_id",
+  "patient_id",
   "shooting_date",
-  "doctor_name",
-  "photographer_name",
+  "doctor_id",
+  "photographer_id",
+  "confidence_score",
+  "needs_review",
   "review_status",
   "export_status",
   "reviewer_id",
   "reviewed_at",
   "approved_at",
-  "notes",
   "created_at",
-  "updated_at"
+  "patient_uuid"
 ].join(",");
 
 const photoColumns = [
@@ -128,7 +129,7 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
     .from("photo_groups")
     .select(groupColumns)
     .eq("review_status", "pending")
-    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(100);
 
   if (error) {
@@ -228,11 +229,10 @@ export async function updateReviewGroupMetadata(
 
   const now = new Date().toISOString();
   const updatePayload = {
-    provisional_patient_id: normalizeNullableText(form.provisional_patient_id),
+    patient_id: normalizeNullableText(form.patient_id),
     shooting_date: normalizeNullableText(form.shooting_date),
-    doctor_name: normalizeNullableText(form.doctor_name),
-    photographer_name: normalizeNullableText(form.photographer_name),
-    notes: normalizeNullableText(form.notes),
+    doctor_id: normalizeNullableText(form.doctor_id),
+    photographer_id: normalizeNullableText(form.photographer_id),
     reviewed_at: now
   };
 
@@ -252,25 +252,6 @@ export async function updateReviewGroupMetadata(
   }
 
   const photoIds = await fetchPhotoIdsForGroup(groupId);
-  if (photoIds.status === "error") {
-    return {
-      status: "error",
-      group: null,
-      message: photoIds.message
-    };
-  }
-
-  if (photoIds.ids.length > 0) {
-    const { error: photoError } = await supabase.from("photos").update(updatePayload).in("id", photoIds.ids);
-
-    if (photoError) {
-      return {
-        status: "error",
-        group: null,
-        message: photoError.message
-      };
-    }
-  }
 
   return {
     status: "success",
@@ -397,13 +378,9 @@ async function ensurePendingPhotosHaveGroups() {
     const { data: groupData, error: groupError } = await supabase
       .from("photo_groups")
       .insert({
-        group_label: createGroupLabel(photo),
-        provisional_patient_id: photo.provisional_patient_id,
-        doctor_name: photo.doctor_name,
-        photographer_name: photo.photographer_name,
+        patient_id: photo.provisional_patient_id,
         review_status: "pending",
-        export_status: "not_exported",
-        notes: photo.notes
+        export_status: "not_exported"
       })
       .select("id")
       .single();
@@ -483,10 +460,6 @@ async function fetchPhotoIdsForGroup(groupId: string) {
     ids: ((data ?? []) as unknown as Array<{ photo_id: string }>).map((item) => item.photo_id),
     message: "グループ内写真IDを取得しました"
   };
-}
-
-function createGroupLabel(photo: PhotoRow) {
-  return photo.provisional_patient_id ? `患者候補 ${photo.provisional_patient_id}` : `患者候補 ${photo.original_filename}`;
 }
 
 function normalizeNullableText(value: string) {

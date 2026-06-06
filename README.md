@@ -290,11 +290,18 @@ Group review behavior:
 - Group photo counts are calculated from `photo_group_items`
 - Selecting a group loads its photos through `photo_group_items`
 - Group metadata can be edited:
-  - `provisional_patient_id`
+  - `patient_id`
+  - `shooting_date`
+  - `doctor_id`
+  - `photographer_id`
+- `doctor_id` and `photographer_id` are UUID string inputs until staff table selection is implemented
+- The group Review workflow does not use:
   - `doctor_name`
   - `photographer_name`
   - `notes`
-- `レビュー内容を保存` updates the selected group and propagates metadata to its photos
+  - `group_label`
+  - `updated_at`
+- `レビュー内容を保存` updates the selected group only
 - `レビュー完了` updates the selected group and its photos to:
   - `review_status = approved`
   - `export_status = ready_for_export`
@@ -328,17 +335,16 @@ Verification coverage:
 - Confirms `photo_groups` pending fetch returns the group
 - Confirms child `photos` load through `photo_group_items`
 - Saves group metadata:
-  - `provisional_patient_id`
+  - `patient_id`
   - `shooting_date`
-  - `doctor_name`
-  - `photographer_name`
-  - `notes`
+  - `doctor_id`
+  - `photographer_id`
   - `reviewed_at`
 - Completes review and confirms the group becomes `approved / ready_for_export`
 - Confirms child photos also become `approved / ready_for_export`
 - Confirms pending photo count returns to the pre-test value after completion
 
-The current MVP schema uses `provisional_patient_id`, `doctor_name`, and `photographer_name`. It does not define `patient_id`, `doctor_id`, or `photographer_id` columns yet.
+The real database uses `patient_id`, `doctor_id`, and `photographer_id` for `photo_groups`. Do not use `provisional_patient_id`, `doctor_name`, `photographer_name`, `notes`, `group_label`, or `updated_at` on `photo_groups`.
 
 ## Database Reference
 
