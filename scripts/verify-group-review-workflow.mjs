@@ -115,7 +115,7 @@ console.log(
   JSON.stringify(
     {
       photo_id: insertedPhoto.id,
-      group_id: group.id,
+      photo_group_id: group.id,
       pending_before: pendingBefore,
       pending_after: pendingAfter
     },
@@ -169,7 +169,7 @@ async function createOnePhotoGroupForPhoto(photo) {
 
   const { error: itemError } = await supabase.from("photo_group_items").insert({
     photo_id: photo.id,
-    group_id: group.id,
+    photo_group_id: group.id,
     sort_order: 1
   });
 
@@ -198,8 +198,8 @@ async function fetchPendingGroups() {
 async function fetchPhotosForGroup(groupId) {
   const { data: items, error: itemError } = await supabase
     .from("photo_group_items")
-    .select("photo_id,group_id,sort_order")
-    .eq("group_id", groupId)
+    .select("photo_id,photo_group_id,sort_order")
+    .eq("photo_group_id", groupId)
     .order("sort_order", { ascending: true });
 
   if (itemError) {
@@ -218,7 +218,10 @@ async function fetchPhotosForGroup(groupId) {
 }
 
 async function fetchItemsForPhoto(photoId) {
-  const { data, error } = await supabase.from("photo_group_items").select("photo_id,group_id,sort_order").eq("photo_id", photoId);
+  const { data, error } = await supabase
+    .from("photo_group_items")
+    .select("photo_id,photo_group_id,sort_order")
+    .eq("photo_id", photoId);
 
   if (error) {
     throw new Error(`Fetch photo items failed: ${error.message}`);

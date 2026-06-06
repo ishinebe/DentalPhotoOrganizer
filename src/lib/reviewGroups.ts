@@ -102,7 +102,7 @@ type GroupRow = Omit<ReviewGroup, "photo_count">;
 type PhotoRow = Omit<ReviewGroupPhoto, "sort_order">;
 type GroupItemRow = {
   photo_id: string;
-  group_id: string;
+  photo_group_id: string;
   sort_order: number | null;
 };
 
@@ -163,8 +163,8 @@ export async function fetchReviewGroupPhotos(groupId: string): Promise<ReviewGro
 
   const { data: itemData, error: itemError } = await supabase
     .from("photo_group_items")
-    .select("photo_id,group_id,sort_order")
-    .eq("group_id", groupId)
+    .select("photo_id,photo_group_id,sort_order")
+    .eq("photo_group_id", groupId)
     .order("sort_order", { ascending: true });
 
   if (itemError) {
@@ -377,7 +377,7 @@ async function ensurePendingPhotosHaveGroups() {
 
   const { data: itemData, error: itemError } = await supabase
     .from("photo_group_items")
-    .select("photo_id,group_id,sort_order")
+    .select("photo_id,photo_group_id,sort_order")
     .in(
       "photo_id",
       photos.map((photo) => photo.id)
@@ -418,7 +418,7 @@ async function ensurePendingPhotosHaveGroups() {
     const groupId = (groupData as { id: string }).id;
     const { error: itemInsertError } = await supabase.from("photo_group_items").insert({
       photo_id: photo.id,
-      group_id: groupId,
+      photo_group_id: groupId,
       sort_order: 1
     });
 
@@ -445,15 +445,15 @@ async function fetchGroupPhotoCounts(groupIds: string[]) {
 
   const { data, error } = await supabase
     .from("photo_group_items")
-    .select("photo_id,group_id,sort_order")
-    .in("group_id", groupIds);
+    .select("photo_id,photo_group_id,sort_order")
+    .in("photo_group_id", groupIds);
 
   if (error) {
     return counts;
   }
 
   for (const item of (data ?? []) as unknown as GroupItemRow[]) {
-    counts.set(item.group_id, (counts.get(item.group_id) ?? 0) + 1);
+    counts.set(item.photo_group_id, (counts.get(item.photo_group_id) ?? 0) + 1);
   }
 
   return counts;
@@ -468,7 +468,7 @@ async function fetchPhotoIdsForGroup(groupId: string) {
     };
   }
 
-  const { data, error } = await supabase.from("photo_group_items").select("photo_id").eq("group_id", groupId);
+  const { data, error } = await supabase.from("photo_group_items").select("photo_id").eq("photo_group_id", groupId);
 
   if (error) {
     return {
