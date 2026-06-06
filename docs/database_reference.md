@@ -122,6 +122,7 @@ Important notes:
 - Use `photo_group_id`; do not use `group_id`.
 - Existing code must select/filter/insert with `photo_group_id`.
 - This table is required even for temporary `1 photo = 1 group` grouping.
+- Local MVP group review assumes one `photo_id` belongs to one group. Prefer a unique constraint on `photo_group_items.photo_id` after existing duplicates are cleaned up.
 
 ## import_batches
 

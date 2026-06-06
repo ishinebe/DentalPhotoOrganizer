@@ -103,6 +103,13 @@ type GroupItemRow = {
   sort_order: number | null;
 };
 
+let pendingEnsureGroupsPromise: Promise<EnsureGroupsResult> | null = null;
+
+type EnsureGroupsResult = {
+  status: "success" | "error" | "not-configured";
+  message: string;
+};
+
 export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
   if (!hasSupabaseConfig || !supabase) {
     return {
@@ -137,14 +144,17 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
   }
 
   const groups = (data ?? []) as unknown as GroupRow[];
-  const counts = await fetchGroupPhotoCounts(groups.map((group) => group.id));
+  const memberships = await fetchGroupPhotoMemberships(groups.map((group) => group.id));
+  const visibleGroupIds = selectFirstGroupPerPhoto(groups, memberships.items);
 
   return {
     status: "success",
-    groups: groups.map((group) => ({
-      ...group,
-      photo_count: counts.get(group.id) ?? 0
-    })),
+    groups: groups
+      .filter((group) => visibleGroupIds.has(group.id))
+      .map((group) => ({
+        ...group,
+        photo_count: memberships.counts.get(group.id) ?? 0
+      })),
     message: "レビュー待ちグループを取得しました"
   };
 }
@@ -172,7 +182,7 @@ export async function fetchReviewGroupPhotos(groupId: string): Promise<ReviewGro
     };
   }
 
-  const items = (itemData ?? []) as unknown as GroupItemRow[];
+  const items = dedupeGroupItemsByPhoto((itemData ?? []) as unknown as GroupItemRow[]);
   const photoIds = items.map((item) => item.photo_id);
 
   if (photoIds.length === 0) {
@@ -322,7 +332,17 @@ export async function completeReviewGroup(groupId: string): Promise<ReviewGroupM
   };
 }
 
-async function ensurePendingPhotosHaveGroups() {
+async function ensurePendingPhotosHaveGroups(): Promise<EnsureGroupsResult> {
+  if (!pendingEnsureGroupsPromise) {
+    pendingEnsureGroupsPromise = ensurePendingPhotosHaveGroupsInternal().finally(() => {
+      pendingEnsureGroupsPromise = null;
+    });
+  }
+
+  return pendingEnsureGroupsPromise;
+}
+
+async function ensurePendingPhotosHaveGroupsInternal(): Promise<EnsureGroupsResult> {
   if (!supabase) {
     return {
       status: "not-configured" as const,
@@ -371,6 +391,19 @@ async function ensurePendingPhotosHaveGroups() {
   const ungroupedPhotos = photos.filter((photo) => !groupedPhotoIds.has(photo.id));
 
   for (const photo of ungroupedPhotos) {
+    const existingItem = await fetchFirstGroupItemForPhoto(photo.id);
+    if (existingItem.status === "error") {
+      return {
+        status: "error" as const,
+        message: existingItem.message
+      };
+    }
+
+    if (existingItem.item) {
+      groupedPhotoIds.add(photo.id);
+      continue;
+    }
+
     const { data: groupData, error: groupError } = await supabase
       .from("photo_groups")
       .insert({
@@ -388,6 +421,21 @@ async function ensurePendingPhotosHaveGroups() {
     }
 
     const groupId = (groupData as { id: string }).id;
+    const postGroupExistingItem = await fetchFirstGroupItemForPhoto(photo.id);
+    if (postGroupExistingItem.status === "error") {
+      await deleteNewlyCreatedGroup(groupId);
+      return {
+        status: "error" as const,
+        message: postGroupExistingItem.message
+      };
+    }
+
+    if (postGroupExistingItem.item) {
+      await deleteNewlyCreatedGroup(groupId);
+      groupedPhotoIds.add(photo.id);
+      continue;
+    }
+
     const { error: itemInsertError } = await supabase.from("photo_group_items").insert({
       photo_id: photo.id,
       photo_group_id: groupId,
@@ -395,6 +443,12 @@ async function ensurePendingPhotosHaveGroups() {
     });
 
     if (itemInsertError) {
+      await deleteNewlyCreatedGroup(groupId);
+      if (isUniqueViolation(itemInsertError)) {
+        groupedPhotoIds.add(photo.id);
+        continue;
+      }
+
       return {
         status: "error" as const,
         message: itemInsertError.message
@@ -408,11 +462,14 @@ async function ensurePendingPhotosHaveGroups() {
   };
 }
 
-async function fetchGroupPhotoCounts(groupIds: string[]) {
+async function fetchGroupPhotoMemberships(groupIds: string[]) {
   const counts = new Map<string, number>();
 
   if (!supabase || groupIds.length === 0) {
-    return counts;
+    return {
+      counts,
+      items: []
+    };
   }
 
   const { data, error } = await supabase
@@ -421,14 +478,22 @@ async function fetchGroupPhotoCounts(groupIds: string[]) {
     .in("photo_group_id", groupIds);
 
   if (error) {
-    return counts;
+    return {
+      counts,
+      items: []
+    };
   }
 
-  for (const item of (data ?? []) as unknown as GroupItemRow[]) {
+  const items = dedupeGroupItemsByGroupAndPhoto((data ?? []) as unknown as GroupItemRow[]);
+
+  for (const item of items) {
     counts.set(item.photo_group_id, (counts.get(item.photo_group_id) ?? 0) + 1);
   }
 
-  return counts;
+  return {
+    counts,
+    items
+  };
 }
 
 async function fetchPhotoIdsForGroup(groupId: string) {
@@ -460,4 +525,92 @@ async function fetchPhotoIdsForGroup(groupId: string) {
 function normalizeNullableText(value: string) {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+async function fetchFirstGroupItemForPhoto(photoId: string) {
+  if (!supabase) {
+    return {
+      status: "not-configured" as const,
+      item: null,
+      message: "Supabase is not configured"
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("photo_group_items")
+    .select("photo_id,photo_group_id,sort_order")
+    .eq("photo_id", photoId)
+    .limit(1);
+
+  if (error) {
+    return {
+      status: "error" as const,
+      item: null,
+      message: error.message
+    };
+  }
+
+  return {
+    status: "success" as const,
+    item: ((data ?? []) as unknown as GroupItemRow[])[0] ?? null,
+    message: "photo_group_items繧堤｢ｺ隱阪＠縺ｾ縺励◆"
+  };
+}
+
+async function deleteNewlyCreatedGroup(groupId: string) {
+  if (!supabase) {
+    return;
+  }
+
+  await supabase.from("photo_groups").delete().eq("id", groupId);
+}
+
+function isUniqueViolation(error: { code?: string; message?: string }) {
+  return error.code === "23505" || /duplicate key|unique/i.test(error.message ?? "");
+}
+
+function dedupeGroupItemsByPhoto(items: GroupItemRow[]) {
+  const seenPhotoIds = new Set<string>();
+  return items.filter((item) => {
+    if (seenPhotoIds.has(item.photo_id)) {
+      return false;
+    }
+
+    seenPhotoIds.add(item.photo_id);
+    return true;
+  });
+}
+
+function dedupeGroupItemsByGroupAndPhoto(items: GroupItemRow[]) {
+  const seenKeys = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.photo_group_id}:${item.photo_id}`;
+    if (seenKeys.has(key)) {
+      return false;
+    }
+
+    seenKeys.add(key);
+    return true;
+  });
+}
+
+function selectFirstGroupPerPhoto(groups: GroupRow[], items: GroupItemRow[]) {
+  const visibleGroupIds = new Set<string>();
+  const seenPhotoIds = new Set<string>();
+  const groupOrder = new Map(groups.map((group, index) => [group.id, index]));
+  const orderedItems = [...items].sort((a, b) => {
+    const groupIndexDiff = (groupOrder.get(a.photo_group_id) ?? 0) - (groupOrder.get(b.photo_group_id) ?? 0);
+    return groupIndexDiff !== 0 ? groupIndexDiff : (a.sort_order ?? 0) - (b.sort_order ?? 0);
+  });
+
+  for (const item of orderedItems) {
+    if (seenPhotoIds.has(item.photo_id)) {
+      continue;
+    }
+
+    seenPhotoIds.add(item.photo_id);
+    visibleGroupIds.add(item.photo_group_id);
+  }
+
+  return visibleGroupIds;
 }

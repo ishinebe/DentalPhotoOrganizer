@@ -375,6 +375,49 @@ alter table public.photos
 
 Phase4-A only detects, stores, and displays code metadata. It does not automatically assign `patient_id`, create groups from QR values, run OCR, run AI classification, or change/export image files.
 
+## Group duplication prevention
+
+Review auto-grouping must not create a new `photo_groups` row when the target `photo_id` already exists in `photo_group_items`.
+
+Current rules:
+
+- Import creates `photos` metadata only.
+- Review creates temporary groups only for pending photos that have no `photo_group_items` row.
+- Before creating a group, Review rechecks `photo_group_items` for the target `photo_id`.
+- Review hides duplicate group memberships so the same photo is not shown multiple times.
+- The intended local MVP relationship is one `photo_id` to one `photo_group_id`.
+
+Check existing duplicate memberships before applying the unique constraint:
+
+```sql
+select photo_id, count(*) as group_item_count
+from photo_group_items
+group by photo_id
+having count(*) > 1;
+```
+
+If duplicates exist, inspect them manually before deleting anything:
+
+```sql
+select *
+from photo_group_items
+where photo_id in (
+  select photo_id
+  from photo_group_items
+  group by photo_id
+  having count(*) > 1
+)
+order by photo_id, created_at;
+```
+
+This project does not include automatic cleanup SQL for existing duplicate groups. After manually resolving duplicates, this SQL can be applied in Supabase SQL Editor:
+
+```sql
+-- supabase/phase_group_item_photo_unique.sql
+alter table public.photo_group_items
+  add constraint photo_group_items_photo_id_unique unique (photo_id);
+```
+
 ## Database Reference
 
 実装時のDBカラム参照は `docs/database_reference.md` を優先する。
