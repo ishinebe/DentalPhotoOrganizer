@@ -412,6 +412,58 @@ alter table public.photos
 
 Phase4-A only detects, stores, and displays code metadata. It does not automatically assign `patient_id`, create groups from QR values, run OCR, run AI classification, or change/export image files.
 
+## Phase4-A QR boundary photo sets
+
+Review now groups unassigned pending photos into shooting sets by QR filename boundaries.
+
+Grouping rule:
+
+- Sort pending photos by `original_filename` natural ascending order, then `imported_at`
+- A filename containing `QR` starts a new shooting set
+- `QR_PATIENT_0001` style filenames are parsed as a UI-only patient candidate
+- The QR image itself is included in the shooting set
+- Photos before the first QR image become one unclassified shooting set
+- Already assigned `photo_group_items.photo_id` values are not regrouped by the automatic first-load process
+- Approved photos are not changed by the regroup button
+
+The current real `photo_groups` schema does not have a dedicated provisional patient id column. QR patient candidates are therefore displayed in the UI only. Before production use, add a clear provisional patient id column or a related metadata table if QR-derived candidates must be persisted on `photo_groups`.
+
+The Review screen includes a development button:
+
+```text
+QR境界で再グループ化
+```
+
+This button removes group memberships for pending photos, deletes empty pending groups, and recreates pending shooting sets from QR filename boundaries. It never modifies image files or approved photos.
+
+Manual verification SQL:
+
+```sql
+select count(*) from photos;
+select count(*) from photo_groups;
+select count(*) from photo_group_items;
+```
+
+Duplicate membership check:
+
+```sql
+select photo_id, count(*) as count
+from photo_group_items
+group by photo_id
+having count(*) > 1;
+```
+
+Shooting set size check:
+
+```sql
+select
+  pgi.photo_group_id,
+  count(*) as photo_count
+from photo_group_items pgi
+group by pgi.photo_group_id
+order by photo_count desc;
+```
+
 ## Group duplication prevention
 
 Review auto-grouping must not create a new `photo_groups` row when the target `photo_id` already exists in `photo_group_items`.

@@ -17,6 +17,7 @@ export type ReviewGroup = {
   created_at: string | null;
   patient_uuid: string | null;
   photo_count: number;
+  qr_patient_candidate: string | null;
 };
 
 export type ReviewGroupPhoto = {
@@ -101,12 +102,17 @@ const photoColumns = [
   "approved_at"
 ].join(",");
 
-type GroupRow = Omit<ReviewGroup, "photo_count">;
+type GroupRow = Omit<ReviewGroup, "photo_count" | "qr_patient_candidate">;
 type PhotoRow = Omit<ReviewGroupPhoto, "sort_order">;
 type GroupItemRow = {
   photo_id: string;
   photo_group_id: string;
   sort_order: number | null;
+};
+
+type PhotoSet = {
+  qrPatientCandidate: string | null;
+  photos: PhotoRow[];
 };
 
 let pendingEnsureGroupsPromise: Promise<EnsureGroupsResult> | null = null;
@@ -115,6 +121,11 @@ type EnsureGroupsResult = {
   status: "success" | "error" | "not-configured";
   message: string;
 };
+
+const filenameCollator = new Intl.Collator("ja-JP", {
+  numeric: true,
+  sensitivity: "base"
+});
 
 export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
   if (!hasSupabaseConfig || !supabase) {
@@ -152,6 +163,7 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
   const groups = (data ?? []) as unknown as GroupRow[];
   const memberships = await fetchGroupPhotoMemberships(groups.map((group) => group.id));
   const visibleGroupIds = selectFirstGroupPerPhoto(groups, memberships.items);
+  const qrPatientCandidates = await fetchGroupQrPatientCandidates(memberships.items);
 
   return {
     status: "success",
@@ -159,7 +171,8 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
       .filter((group) => visibleGroupIds.has(group.id) && (memberships.counts.get(group.id) ?? 0) > 0)
       .map((group) => ({
         ...group,
-        photo_count: memberships.counts.get(group.id) ?? 0
+        photo_count: memberships.counts.get(group.id) ?? 0,
+        qr_patient_candidate: qrPatientCandidates.get(group.id) ?? null
       })),
     message: "レビュー待ちグループを取得しました"
   };
@@ -269,7 +282,8 @@ export async function updateReviewGroupMetadata(
     status: "success",
     group: {
       ...((data as unknown as GroupRow) ?? {}),
-      photo_count: photoIds.ids.length
+      photo_count: photoIds.ids.length,
+      qr_patient_candidate: null
     },
     message: "レビュー内容を保存しました"
   };
@@ -332,7 +346,8 @@ export async function completeReviewGroup(groupId: string): Promise<ReviewGroupM
     status: "success",
     group: {
       ...((data as unknown as GroupRow) ?? {}),
-      photo_count: photoIds.ids.length
+      photo_count: photoIds.ids.length,
+      qr_patient_candidate: null
     },
     message: "レビュー完了にしました"
   };
@@ -394,77 +409,19 @@ async function ensurePendingPhotosHaveGroupsInternal(): Promise<EnsureGroupsResu
   }
 
   const groupedPhotoIds = new Set(((itemData ?? []) as unknown as GroupItemRow[]).map((item) => item.photo_id));
-  const ungroupedPhotos = photos.filter((photo) => !groupedPhotoIds.has(photo.id));
+  const ungroupedPhotos = sortPhotosForQrBoundaryGrouping(photos.filter((photo) => !groupedPhotoIds.has(photo.id)));
+  const photoSets = buildQrBoundaryPhotoSets(ungroupedPhotos);
 
-  for (const photo of ungroupedPhotos) {
-    const existingItem = await fetchFirstGroupItemForPhoto(photo.id);
-    if (existingItem.status === "error") {
-      return {
-        status: "error" as const,
-        message: existingItem.message
-      };
-    }
-
-    if (existingItem.item) {
-      groupedPhotoIds.add(photo.id);
-      continue;
-    }
-
-    const { data: groupData, error: groupError } = await supabase
-      .from("photo_groups")
-      .insert({
-        review_status: "pending",
-        export_status: "not_exported"
-      })
-      .select("id")
-      .single();
-
-    if (groupError) {
-      return {
-        status: "error" as const,
-        message: groupError.message
-      };
-    }
-
-    const groupId = (groupData as { id: string }).id;
-    const postGroupExistingItem = await fetchFirstGroupItemForPhoto(photo.id);
-    if (postGroupExistingItem.status === "error") {
-      await deleteNewlyCreatedGroup(groupId);
-      return {
-        status: "error" as const,
-        message: postGroupExistingItem.message
-      };
-    }
-
-    if (postGroupExistingItem.item) {
-      await deleteNewlyCreatedGroup(groupId);
-      groupedPhotoIds.add(photo.id);
-      continue;
-    }
-
-    const { error: itemInsertError } = await supabase.from("photo_group_items").insert({
-      photo_id: photo.id,
-      photo_group_id: groupId,
-      sort_order: 1
-    });
-
-    if (itemInsertError) {
-      await deleteNewlyCreatedGroup(groupId);
-      if (isUniqueViolation(itemInsertError)) {
-        groupedPhotoIds.add(photo.id);
-        continue;
-      }
-
-      return {
-        status: "error" as const,
-        message: itemInsertError.message
-      };
+  for (const photoSet of photoSets) {
+    const createResult = await createPhotoGroupForSet(photoSet);
+    if (createResult.status === "error") {
+      return createResult;
     }
   }
 
   return {
     status: "success" as const,
-    message: "未所属写真を暫定グループ化しました"
+    message: "QR boundary groups were ensured"
   };
 }
 
@@ -684,6 +641,75 @@ export async function mergeGroups(sourceGroupId: string, targetGroupId: string):
   };
 }
 
+export async function regroupPendingPhotosByQrBoundaries(): Promise<ReviewGroupEditResult> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      status: "not-configured",
+      groupId: null,
+      message: "Supabase is not configured"
+    };
+  }
+
+  const { data: photoData, error: photoError } = await supabase
+    .from("photos")
+    .select(photoColumns)
+    .eq("review_status", "pending")
+    .order("original_filename", { ascending: true })
+    .order("imported_at", { ascending: true });
+
+  if (photoError) {
+    return {
+      status: "error",
+      groupId: null,
+      message: photoError.message
+    };
+  }
+
+  const pendingPhotos = sortPhotosForQrBoundaryGrouping((photoData ?? []) as unknown as PhotoRow[]);
+  if (pendingPhotos.length === 0) {
+    return {
+      status: "success",
+      groupId: null,
+      message: "No pending photos to regroup"
+    };
+  }
+
+  const pendingPhotoIds = pendingPhotos.map((photo) => photo.id);
+  const { error: deleteItemsError } = await supabase.from("photo_group_items").delete().in("photo_id", pendingPhotoIds);
+
+  if (deleteItemsError) {
+    return {
+      status: "error",
+      groupId: null,
+      message: deleteItemsError.message
+    };
+  }
+
+  await deleteEmptyPendingGroups();
+
+  const photoSets = buildQrBoundaryPhotoSets(pendingPhotos);
+  let firstGroupId: string | null = null;
+
+  for (const photoSet of photoSets) {
+    const createResult = await createPhotoGroupForSet(photoSet);
+    if (createResult.status === "error") {
+      return {
+        status: "error",
+        groupId: firstGroupId,
+        message: createResult.message
+      };
+    }
+
+    firstGroupId = firstGroupId ?? createResult.groupId;
+  }
+
+  return {
+    status: "success",
+    groupId: firstGroupId,
+    message: "Pending photos were regrouped by QR boundaries"
+  };
+}
+
 async function fetchPhotoIdsForGroup(groupId: string) {
   if (!supabase) {
     return {
@@ -713,6 +739,212 @@ async function fetchPhotoIdsForGroup(groupId: string) {
 function normalizeNullableText(value: string) {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function sortPhotosForQrBoundaryGrouping(photos: PhotoRow[]) {
+  return [...photos].sort((a, b) => {
+    const filenameDiff = filenameCollator.compare(a.original_filename, b.original_filename);
+    if (filenameDiff !== 0) {
+      return filenameDiff;
+    }
+
+    return (a.imported_at ?? "").localeCompare(b.imported_at ?? "");
+  });
+}
+
+function buildQrBoundaryPhotoSets(photos: PhotoRow[]) {
+  const sets: PhotoSet[] = [];
+  let currentSet: PhotoSet | null = null;
+
+  for (const photo of photos) {
+    if (isQrBoundaryFilename(photo.original_filename)) {
+      currentSet = {
+        qrPatientCandidate: extractQrPatientCandidate(photo.original_filename),
+        photos: []
+      };
+      sets.push(currentSet);
+    }
+
+    if (!currentSet) {
+      currentSet = {
+        qrPatientCandidate: null,
+        photos: []
+      };
+      sets.push(currentSet);
+    }
+
+    currentSet.photos.push(photo);
+  }
+
+  return sets.filter((set) => set.photos.length > 0);
+}
+
+function isQrBoundaryFilename(filename: string) {
+  return /qr/i.test(filename);
+}
+
+function extractQrPatientCandidate(filename: string) {
+  const match = filename.match(/qr[_-]?patient[_-]?([a-z0-9]+)/i);
+  return match?.[1] ?? null;
+}
+
+async function createPhotoGroupForSet(photoSet: PhotoSet): Promise<ReviewGroupEditResult> {
+  if (!supabase) {
+    return {
+      status: "not-configured",
+      groupId: null,
+      message: "Supabase is not configured"
+    };
+  }
+
+  const ungroupedPhotos: PhotoRow[] = [];
+  for (const photo of photoSet.photos) {
+    const existingItem = await fetchFirstGroupItemForPhoto(photo.id);
+    if (existingItem.status === "error") {
+      return {
+        status: "error",
+        groupId: null,
+        message: existingItem.message
+      };
+    }
+
+    if (!existingItem.item) {
+      ungroupedPhotos.push(photo);
+    }
+  }
+
+  if (ungroupedPhotos.length === 0) {
+    return {
+      status: "success",
+      groupId: null,
+      message: "Photo set already has memberships"
+    };
+  }
+
+  const { data: groupData, error: groupError } = await supabase
+    .from("photo_groups")
+    .insert({
+      review_status: "pending",
+      export_status: "not_exported"
+    })
+    .select("id")
+    .single();
+
+  if (groupError) {
+    return {
+      status: "error",
+      groupId: null,
+      message: groupError.message
+    };
+  }
+
+  const groupId = (groupData as { id: string }).id;
+
+  for (const [index, photo] of ungroupedPhotos.entries()) {
+    const existingItem = await fetchFirstGroupItemForPhoto(photo.id);
+    if (existingItem.status === "error") {
+      await deleteNewlyCreatedGroup(groupId);
+      return {
+        status: "error",
+        groupId: null,
+        message: existingItem.message
+      };
+    }
+
+    if (existingItem.item) {
+      continue;
+    }
+
+    const { error: itemInsertError } = await supabase.from("photo_group_items").insert({
+      photo_id: photo.id,
+      photo_group_id: groupId,
+      sort_order: index + 1
+    });
+
+    if (itemInsertError) {
+      await deleteNewlyCreatedGroup(groupId);
+      if (isUniqueViolation(itemInsertError)) {
+        return {
+          status: "success",
+          groupId: null,
+          message: "Photo set was already grouped"
+        };
+      }
+
+      return {
+        status: "error",
+        groupId: null,
+        message: itemInsertError.message
+      };
+    }
+  }
+
+  return {
+    status: "success",
+    groupId,
+    message: "Photo set grouped by QR boundary"
+  };
+}
+
+async function fetchGroupQrPatientCandidates(items: GroupItemRow[]) {
+  const candidates = new Map<string, string | null>();
+
+  if (!supabase || items.length === 0) {
+    return candidates;
+  }
+
+  const photoIds = [...new Set(items.map((item) => item.photo_id))];
+  const { data, error } = await supabase.from("photos").select("id,original_filename,imported_at").in("id", photoIds);
+
+  if (error) {
+    return candidates;
+  }
+
+  const photoById = new Map(((data ?? []) as unknown as PhotoRow[]).map((photo) => [photo.id, photo]));
+  const itemsByGroup = new Map<string, GroupItemRow[]>();
+
+  for (const item of items) {
+    const groupItems = itemsByGroup.get(item.photo_group_id) ?? [];
+    groupItems.push(item);
+    itemsByGroup.set(item.photo_group_id, groupItems);
+  }
+
+  for (const [groupId, groupItems] of itemsByGroup) {
+    const groupPhotos = sortPhotosForQrBoundaryGrouping(
+      groupItems.map((item) => photoById.get(item.photo_id)).filter((photo): photo is PhotoRow => Boolean(photo))
+    );
+    const qrPhoto = groupPhotos.find((photo) => isQrBoundaryFilename(photo.original_filename));
+    candidates.set(groupId, qrPhoto ? extractQrPatientCandidate(qrPhoto.original_filename) : null);
+  }
+
+  return candidates;
+}
+
+async function deleteEmptyPendingGroups() {
+  if (!supabase) {
+    return;
+  }
+
+  const { data: groupData, error: groupError } = await supabase
+    .from("photo_groups")
+    .select("id")
+    .eq("review_status", "pending");
+
+  if (groupError) {
+    return;
+  }
+
+  const groupIds = ((groupData ?? []) as unknown as Array<{ id: string }>).map((group) => group.id);
+  if (groupIds.length === 0) {
+    return;
+  }
+
+  const memberships = await fetchGroupPhotoMemberships(groupIds);
+  const emptyGroupIds = groupIds.filter((groupId) => (memberships.counts.get(groupId) ?? 0) === 0);
+
+  if (emptyGroupIds.length > 0) {
+    await supabase.from("photo_groups").delete().in("id", emptyGroupIds);
+  }
 }
 
 async function fetchFirstGroupItemForPhoto(photoId: string) {
@@ -750,6 +982,7 @@ async function deleteNewlyCreatedGroup(groupId: string) {
     return;
   }
 
+  await supabase.from("photo_group_items").delete().eq("photo_group_id", groupId);
   await supabase.from("photo_groups").delete().eq("id", groupId);
 }
 

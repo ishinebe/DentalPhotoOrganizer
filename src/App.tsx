@@ -24,6 +24,7 @@ import {
   fetchReviewGroupPhotos,
   mergeGroups,
   movePhotoToGroup,
+  regroupPendingPhotosByQrBoundaries,
   splitPhotoToNewGroup,
   type ReviewGroup,
   type ReviewGroupForm,
@@ -52,7 +53,10 @@ type ReviewActionStatus =
   | "分離失敗"
   | "統合中"
   | "統合成功"
-  | "統合失敗";
+  | "統合失敗"
+  | "再グループ化中"
+  | "再グループ化成功"
+  | "再グループ化失敗";
 type PreviewStatus = "未選択" | "読み込み中" | "表示中" | "読み込み失敗" | "未対応形式" | "Electron API未接続";
 
 const emptyStats = {
@@ -540,7 +544,8 @@ function formatDateTime(value: string | null) {
 }
 
 function formatGroupOption(group: ReviewGroup) {
-  const label = group.patient_id ? `患者候補 ${group.patient_id}` : `患者候補 ${group.id.slice(0, 8)}`;
+  const patientCandidate = group.patient_id ?? group.qr_patient_candidate;
+  const label = patientCandidate ? `患者候補 ${patientCandidate}` : `撮影セット ${group.id.slice(0, 8)}`;
   return `${label} / ${group.photo_count}枚`;
 }
 
@@ -557,7 +562,7 @@ function Review() {
   const [form, setForm] = useState<ReviewGroupForm>(emptyReviewForm);
   const [loadStatus, setLoadStatus] = useState<ReviewLoadStatus>("読み込み中");
   const [actionStatus, setActionStatus] = useState<ReviewActionStatus>("待機中");
-  const [message, setMessage] = useState("レビュー待ちグループを読み込んでいます");
+  const [message, setMessage] = useState("レビュー待ち撮影セットを読み込んでいます");
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("未選択");
   const [previewMessage, setPreviewMessage] = useState("写真を選択するとプレビューを読み込みます");
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
@@ -574,7 +579,7 @@ function Review() {
   const loadGroups = useCallback(async (preferredGroupId?: string | null) => {
     setLoadStatus("読み込み中");
     setActionStatus("待機中");
-    setMessage("レビュー待ちグループを読み込んでいます");
+    setMessage("レビュー待ち撮影セットを読み込んでいます");
 
     const result = await fetchPendingReviewGroups();
 
@@ -605,7 +610,7 @@ function Review() {
       null;
     setSelectedGroupId(nextSelectedGroupId);
     setLoadStatus(result.groups.length > 0 ? "表示中" : "データなし");
-    setMessage(result.groups.length > 0 ? "レビュー待ちグループを表示しています" : "レビュー待ちグループはありません");
+    setMessage(result.groups.length > 0 ? "レビュー待ち撮影セットを表示しています" : "レビュー待ち撮影セットはありません");
   }, []);
 
   useEffect(() => {
@@ -764,7 +769,7 @@ function Review() {
     }
 
     setActionStatus("承認中");
-    setMessage("グループをレビュー完了にしています");
+    setMessage("撮影セットをレビュー完了にしています");
 
     const result = await completeReviewGroup(selectedGroup.id);
 
@@ -790,7 +795,7 @@ function Review() {
     }
 
     setActionStatus("移動中");
-    setMessage("写真を別グループへ移動しています");
+    setMessage("写真を別の撮影セットへ移動しています");
 
     const result = await movePhotoToGroup(selectedPhoto.id, moveTargetGroupId);
 
@@ -813,7 +818,7 @@ function Review() {
     }
 
     setActionStatus("分離中");
-    setMessage("写真を新しいグループへ分離しています");
+    setMessage("写真を新しい撮影セットへ分離しています");
 
     const result = await splitPhotoToNewGroup(selectedPhoto.id);
 
@@ -836,15 +841,16 @@ function Review() {
     }
 
     const targetGroup = groups.find((group) => group.id === mergeTargetGroupId);
-    const targetLabel = targetGroup?.patient_id ?? targetGroup?.id.slice(0, 8) ?? mergeTargetGroupId.slice(0, 8);
-    const confirmed = window.confirm(`選択中グループを ${targetLabel} に統合します。よろしいですか？`);
+    const targetLabel =
+      targetGroup?.patient_id ?? targetGroup?.qr_patient_candidate ?? targetGroup?.id.slice(0, 8) ?? mergeTargetGroupId.slice(0, 8);
+    const confirmed = window.confirm(`選択中の撮影セットを ${targetLabel} に統合します。よろしいですか？`);
 
     if (!confirmed) {
       return;
     }
 
     setActionStatus("統合中");
-    setMessage("グループを統合しています");
+    setMessage("撮影セットを統合しています");
 
     const result = await mergeGroups(selectedGroup.id, mergeTargetGroupId);
 
@@ -861,19 +867,47 @@ function Review() {
     await loadGroups(result.groupId);
   };
 
+  const handleRegroupByQrBoundaries = async () => {
+    const confirmed = window.confirm(
+      "pending写真のグループ所属を整理し、ファイル名のQR境界で撮影セットを再作成します。approved写真と元画像ファイルは変更しません。よろしいですか？"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setActionStatus("再グループ化中");
+    setMessage("QR境界で撮影セットを再グループ化しています");
+
+    const result = await regroupPendingPhotosByQrBoundaries();
+
+    if (result.status !== "success") {
+      setActionStatus("再グループ化失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    setActionStatus("再グループ化成功");
+    setMessage(result.message);
+    setGroupPhotos([]);
+    setSelectedPhotoId(null);
+    await loadGroups(result.groupId);
+  };
+
   const isBusy =
     actionStatus === "保存中" ||
     actionStatus === "承認中" ||
     actionStatus === "移動中" ||
     actionStatus === "分離中" ||
     actionStatus === "統合中" ||
+    actionStatus === "再グループ化中" ||
     loadStatus === "読み込み中";
 
   return (
     <div className="review-layout">
       <aside className="patient-column">
         <div className="column-title">
-          <h2>グループ一覧</h2>
+          <h2>撮影セット一覧</h2>
           <span>{groups.length}件</span>
         </div>
         <div className={`review-status ${loadStatus === "取得失敗" ? "error" : ""}`}>
@@ -884,6 +918,9 @@ function Review() {
           <RefreshCw size={16} />
           再読み込み
         </button>
+        <button className="review-refresh-button" type="button" onClick={handleRegroupByQrBoundaries} disabled={isBusy}>
+          QR境界で再グループ化
+        </button>
         <div className="patient-list review-photo-list">
           {groups.map((group) => (
             <button
@@ -892,9 +929,13 @@ function Review() {
               onClick={() => setSelectedGroupId(group.id)}
               type="button"
             >
-              <strong>{group.patient_id ? `患者候補 ${group.patient_id}` : `患者候補 ${group.id.slice(0, 8)}`}</strong>
+              <strong>
+                {group.patient_id || group.qr_patient_candidate
+                  ? `患者候補 ${group.patient_id ?? group.qr_patient_candidate}`
+                  : `撮影セット ${group.id.slice(0, 8)}`}
+              </strong>
               <span>
-                {group.photo_count}枚 / {group.patient_id ?? "患者ID未設定"}
+                {group.photo_count}枚 / {group.patient_id ?? group.qr_patient_candidate ?? "患者ID候補なし"}
               </span>
               <em>
                 {group.review_status} / {formatDateTime(group.created_at)}
@@ -904,7 +945,7 @@ function Review() {
           {groups.length === 0 && (
             <div className="empty-result compact">
               <ClipboardCheck size={24} />
-              <span>{loadStatus === "読み込み中" ? "読み込み中" : "レビュー待ちグループはありません"}</span>
+              <span>{loadStatus === "読み込み中" ? "読み込み中" : "レビュー待ち撮影セットはありません"}</span>
             </div>
           )}
         </div>
@@ -912,7 +953,7 @@ function Review() {
 
       <section className="thumbnail-column">
         <div className="column-title">
-          <h2>グループ内写真</h2>
+          <h2>撮影セット内写真</h2>
           <span>{selectedGroup ? `${groupPhotos.length}枚` : "未選択"}</span>
         </div>
         {selectedGroup ? (
@@ -944,17 +985,17 @@ function Review() {
               {groupPhotos.length === 0 && (
                 <div className="empty-result compact">
                   <ImageIcon size={24} />
-                  <span>このグループには写真がありません</span>
+                  <span>この撮影セットには写真がありません</span>
                 </div>
               )}
             </div>
             <div className="group-edit-panel">
               <div className="group-edit-header">
-                <strong>手動グループ編集</strong>
+                <strong>手動撮影セット編集</strong>
                 <span>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</span>
               </div>
               <label>
-                移動先グループ
+                移動先撮影セット
                 <select
                   value={moveTargetGroupId}
                   onChange={(event) => setMoveTargetGroupId(event.target.value)}
@@ -973,10 +1014,10 @@ function Review() {
                   onClick={handleMovePhoto}
                   disabled={!selectedPhoto || !moveTargetGroupId || isBusy}
                 >
-                  別グループへ移動
+                  別の撮影セットへ移動
                 </button>
                 <button type="button" onClick={handleSplitPhoto} disabled={!selectedPhoto || isBusy}>
-                  新しいグループへ分離
+                  新しい撮影セットへ分離
                 </button>
               </div>
             </div>
@@ -1033,7 +1074,7 @@ function Review() {
 
       <aside className="metadata-column">
         <div className="column-title">
-          <h2>グループ情報</h2>
+          <h2>撮影セット情報</h2>
           <span>{actionStatus}</span>
         </div>
         <form className="metadata-form">
@@ -1075,7 +1116,7 @@ function Review() {
           </label>
           <div className="group-merge-panel">
             <label>
-              統合先グループ
+              統合先撮影セット
               <select
                 value={mergeTargetGroupId}
                 onChange={(event) => setMergeTargetGroupId(event.target.value)}
@@ -1094,7 +1135,7 @@ function Review() {
               onClick={handleMergeGroup}
               disabled={!selectedGroup || !mergeTargetGroupId || isBusy}
             >
-              他グループと統合
+              他の撮影セットと統合
             </button>
           </div>
           <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
