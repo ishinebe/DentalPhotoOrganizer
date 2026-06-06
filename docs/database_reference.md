@@ -39,6 +39,8 @@ Do not invent or guess column names in implementation. Confirm the real table sh
 | file_hash | text | yes | none | Duplicate detection key. 原則編集不可 |
 | file_size | bigint | yes | none | File size in bytes |
 | mime_type | text | yes | none | `image/jpeg`, `image/png`, etc. |
+| code_type | text | yes | none | Phase4-A detected intake form code type. Current value: `qrcode`; future values may include `code128`, `code39`, `ean13` |
+| code_text | text | yes | none | Phase4-A detected code payload text. Store the raw decoded string |
 | captured_at | timestamp with time zone | yes | none | Capture timestamp if known |
 | imported_at | timestamp with time zone | yes | now | Import timestamp |
 | import_batch_id | uuid | yes | none | Related import batch |
@@ -58,6 +60,7 @@ Important notes:
 
 - `original_filename`, `original_path`, and `file_hash` are immutable in normal app workflows.
 - Do not put patient information into working file names.
+- `code_type` and `code_text` are detection metadata only. Phase4-A does not automatically assign patients or groups from these values.
 - In group review, approval should update child `photos` status as well as `photo_groups`.
 
 ## photo_groups

@@ -14,6 +14,8 @@ create table if not exists public.photos (
   file_hash text,
   file_size bigint,
   mime_type text,
+  code_type text,
+  code_text text,
   captured_at timestamptz,
   imported_at timestamptz default now(),
   import_batch_id uuid,

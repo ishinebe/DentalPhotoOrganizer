@@ -5,6 +5,9 @@ import { existsSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import jpeg from "jpeg-js";
+import jsQrModule from "jsqr";
+import { PNG } from "pngjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +27,19 @@ type LocalImageFile = {
   fileSize: number;
   mimeType: string;
   fileHash: string;
+  codeType: "qrcode" | null;
+  codeText: string | null;
 };
+
+type ImageCodeDetection = {
+  codeType: "qrcode" | null;
+  codeText: string | null;
+};
+
+type QrDecoder = (data: Uint8ClampedArray, width: number, height: number) => { data: string } | null;
+
+const decodeQrCode =
+  (jsQrModule as unknown as { default?: QrDecoder }).default ?? (jsQrModule as unknown as QrDecoder);
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -158,12 +173,76 @@ async function collectImageFiles(folderPath: string): Promise<LocalImageFile[]> 
         originalPath,
         fileSize: fileStat.size,
         mimeType: imageMimeTypes.get(extension) ?? "application/octet-stream",
-        fileHash: await calculateSha256(originalPath)
+        fileHash: await calculateSha256(originalPath),
+        ...(await detectImageCode(originalPath))
       };
     })
   );
 
   return files.sort((a, b) => a.originalFilename.localeCompare(b.originalFilename));
+}
+
+async function detectImageCode(filePath: string): Promise<ImageCodeDetection> {
+  const extension = path.extname(filePath).toLowerCase();
+
+  if (!imageMimeTypes.has(extension)) {
+    return {
+      codeType: null,
+      codeText: null
+    };
+  }
+
+  try {
+    const imageBuffer = await readFile(filePath);
+    const imageData = decodeImageForQr(imageBuffer, extension);
+
+    if (!imageData) {
+      return {
+        codeType: null,
+        codeText: null
+      };
+    }
+
+    const qr = decodeQrCode(new Uint8ClampedArray(imageData.data), imageData.width, imageData.height);
+
+    return qr
+      ? {
+          codeType: "qrcode",
+          codeText: qr.data
+        }
+      : {
+          codeType: null,
+          codeText: null
+        };
+  } catch (error) {
+    console.warn("QR code detection failed", filePath, error);
+    return {
+      codeType: null,
+      codeText: null
+    };
+  }
+}
+
+function decodeImageForQr(imageBuffer: Buffer, extension: string) {
+  if (extension === ".png") {
+    const png = PNG.sync.read(imageBuffer);
+    return {
+      width: png.width,
+      height: png.height,
+      data: png.data
+    };
+  }
+
+  if (extension === ".jpg" || extension === ".jpeg") {
+    const decoded = jpeg.decode(imageBuffer, { useTArray: true });
+    return {
+      width: decoded.width,
+      height: decoded.height,
+      data: decoded.data
+    };
+  }
+
+  return null;
 }
 
 function calculateSha256(filePath: string): Promise<string> {

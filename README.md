@@ -346,6 +346,35 @@ Verification coverage:
 
 The real database uses `patient_id`, `doctor_id`, and `photographer_id` for `photo_groups`. Do not use `provisional_patient_id`, `doctor_name`, `photographer_name`, `notes`, `group_label`, or `updated_at` on `photo_groups`.
 
+## Phase4-A Intake form code detection
+
+Import now scans supported local image files for QR codes before saving metadata to Supabase.
+
+Implementation details:
+
+- QR detection runs in Electron main process while reading the selected folder.
+- Renderer does not use `fs` and does not modify local image files.
+- Supported image formats are `jpg`, `jpeg`, and `png`.
+- QR detection uses `jsqr`; PNG/JPEG decoding uses `pngjs` and `jpeg-js`.
+- When a QR code is detected, Import saves:
+  - `photos.code_type = qrcode`
+  - `photos.code_text = detected raw text`
+- When no QR code is detected, Import saves:
+  - `photos.code_type = null`
+  - `photos.code_text = null`
+- Review photo details display `Code Type` and `Code Text`.
+
+Before using this feature against Supabase, run this SQL in the Supabase SQL Editor:
+
+```sql
+-- supabase/phase4a_add_photo_code_columns.sql
+alter table public.photos
+  add column if not exists code_type text,
+  add column if not exists code_text text;
+```
+
+Phase4-A only detects, stores, and displays code metadata. It does not automatically assign `patient_id`, create groups from QR values, run OCR, run AI classification, or change/export image files.
+
 ## Database Reference
 
 実装時のDBカラム参照は `docs/database_reference.md` を優先する。

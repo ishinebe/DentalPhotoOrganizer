@@ -7,6 +7,8 @@ export type ReviewPhoto = {
   file_hash: string | null;
   file_size: number | null;
   mime_type: string | null;
+  code_type: string | null;
+  code_text: string | null;
   imported_at: string | null;
   review_status: "pending" | "reviewing" | "approved" | "rejected";
   export_status: "not_exported" | "ready_for_export" | "exported" | "export_failed";
@@ -44,6 +46,8 @@ const reviewPhotoColumns = [
   "file_hash",
   "file_size",
   "mime_type",
+  "code_type",
+  "code_text",
   "imported_at",
   "review_status",
   "export_status",

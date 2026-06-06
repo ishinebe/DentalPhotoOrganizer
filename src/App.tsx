@@ -478,6 +478,7 @@ function Import() {
           <li>Electron経由でフォルダ選択</li>
           <li>jpg / jpeg / png を抽出</li>
           <li>SHA-256 file_hash を計算</li>
+          <li>QRコード検出結果をメタデータとして保存</li>
           <li>photos テーブルへメタデータ登録</li>
         </ul>
         <div className="import-result">
@@ -847,6 +848,14 @@ function Review() {
               <div>
                 <dt>mime_type</dt>
                 <dd>{selectedPhoto?.mime_type ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>Code Type</dt>
+                <dd>{selectedPhoto?.code_type ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>Code Text</dt>
+                <dd>{selectedPhoto?.code_text ?? "-"}</dd>
               </div>
               <div>
                 <dt>file_size</dt>
