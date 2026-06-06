@@ -83,6 +83,7 @@ const metadata = {
 
 const emptyReviewForm: ReviewGroupForm = {
   provisional_patient_id: "",
+  shooting_date: "",
   doctor_name: "",
   photographer_name: "",
   notes: ""
@@ -625,6 +626,7 @@ function Review() {
 
     setForm({
       provisional_patient_id: selectedGroup.provisional_patient_id ?? "",
+      shooting_date: selectedGroup.shooting_date ?? "",
       doctor_name: selectedGroup.doctor_name ?? "",
       photographer_name: selectedGroup.photographer_name ?? "",
       notes: selectedGroup.notes ?? ""
@@ -887,6 +889,15 @@ function Review() {
               onChange={(event) => updateFormValue("provisional_patient_id", event.target.value)}
               disabled={!selectedGroup || isBusy}
               placeholder="例: P-240015"
+            />
+          </label>
+          <label>
+            shooting_date
+            <input
+              type="date"
+              value={form.shooting_date}
+              onChange={(event) => updateFormValue("shooting_date", event.target.value)}
+              disabled={!selectedGroup || isBusy}
             />
           </label>
           <label>

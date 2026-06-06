@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "electron": "npm run build:electron && electron .",
-    "verify:review": "node scripts/verify-review-workflow.mjs"
+    "verify:review": "node scripts/verify-review-workflow.mjs",
+    "verify:group-review": "node scripts/verify-group-review-workflow.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

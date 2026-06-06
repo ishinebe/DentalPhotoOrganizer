@@ -303,3 +303,39 @@ Group review behavior:
 - Dashboard counts continue to reflect `photos`, so completing a group reduces pending photo count and increases approved photo count
 
 This phase does not implement QR recognition, OCR, AI grouping, similarity detection, export, or Storage migration.
+
+## Phase3-C Group review verification
+
+Use this command to verify the group-based Review workflow against real Supabase data:
+
+```bash
+npm run verify:group-review
+```
+
+The script reads `.env` and requires:
+
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
+
+Verification coverage:
+
+- Inserts one development-only ungrouped pending photo
+- Confirms the photo initially has no `photo_group_items`
+- Creates a temporary `1 photo = 1 group` record using `photo_groups`
+- Creates the matching `photo_group_items` row
+- Confirms `photo_groups` pending fetch returns the group
+- Confirms child `photos` load through `photo_group_items`
+- Saves group metadata:
+  - `provisional_patient_id`
+  - `shooting_date`
+  - `doctor_name`
+  - `photographer_name`
+  - `notes`
+  - `reviewed_at`
+- Completes review and confirms the group becomes `approved / ready_for_export`
+- Confirms child photos also become `approved / ready_for_export`
+- Confirms pending photo count returns to the pre-test value after completion
+
+The current MVP schema uses `provisional_patient_id`, `doctor_name`, and `photographer_name`. It does not define `patient_id`, `doctor_id`, or `photographer_id` columns yet.

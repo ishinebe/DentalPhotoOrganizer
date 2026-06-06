@@ -39,6 +39,7 @@ export type ReviewGroupPhoto = {
 
 export type ReviewGroupForm = {
   provisional_patient_id: string;
+  shooting_date: string;
   doctor_name: string;
   photographer_name: string;
   notes: string;
@@ -228,6 +229,7 @@ export async function updateReviewGroupMetadata(
   const now = new Date().toISOString();
   const updatePayload = {
     provisional_patient_id: normalizeNullableText(form.provisional_patient_id),
+    shooting_date: normalizeNullableText(form.shooting_date),
     doctor_name: normalizeNullableText(form.doctor_name),
     photographer_name: normalizeNullableText(form.photographer_name),
     notes: normalizeNullableText(form.notes),
