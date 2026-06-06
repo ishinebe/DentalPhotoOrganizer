@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { existsSync } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -89,6 +89,51 @@ function registerIpcHandlers() {
       folderPath,
       files
     };
+  });
+
+  ipcMain.handle("load-image-preview", async (_event, filePath: string) => {
+    if (!filePath || typeof filePath !== "string") {
+      return {
+        status: "error",
+        dataUrl: null,
+        message: "original_path が空です"
+      };
+    }
+
+    const extension = path.extname(filePath).toLowerCase();
+    const mimeType = imageMimeTypes.get(extension);
+
+    if (!mimeType) {
+      return {
+        status: "unsupported",
+        dataUrl: null,
+        message: "jpg / jpeg / png のみプレビューできます"
+      };
+    }
+
+    if (!existsSync(filePath)) {
+      return {
+        status: "error",
+        dataUrl: null,
+        message: "画像ファイルが見つかりません"
+      };
+    }
+
+    try {
+      const imageBuffer = await readFile(filePath);
+
+      return {
+        status: "success",
+        dataUrl: `data:${mimeType};base64,${imageBuffer.toString("base64")}`,
+        message: "画像プレビューを読み込みました"
+      };
+    } catch {
+      return {
+        status: "error",
+        dataUrl: null,
+        message: "画像ファイルの読み込みに失敗しました"
+      };
+    }
   });
 }
 

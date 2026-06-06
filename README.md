@@ -231,3 +231,50 @@ npm run lint
 ```bash
 npm run build
 ```
+
+## Phase2-F Review verification
+
+Use this command to verify the Review save and approval workflow against real Supabase data:
+
+```bash
+npm run verify:review
+```
+
+The script reads `.env` and requires both values to be set:
+
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+```
+
+What the script verifies:
+
+- Inserts one development-only pending row into `photos`
+- Updates `provisional_patient_id`
+- Updates `doctor_name`
+- Updates `photographer_name`
+- Updates `notes`
+- Confirms `reviewed_at` is set after save
+- Approves the row
+- Confirms `review_status = approved`
+- Confirms `export_status = ready_for_export`
+- Confirms `reviewed_at` and `approved_at` are set after approval
+- Confirms the approved row is no longer returned as pending
+
+The script does not copy, move, rename, delete, or process any local image file. It creates metadata only.
+
+## Phase3-A Local image preview
+
+Review can display a read-only preview for the selected `photos.original_path` local image.
+
+Preview behavior:
+
+- Renderer does not use `fs`
+- Renderer does not reference local paths directly with `<img src="C:\\...">`
+- Electron main process reads the file
+- Preload exposes `window.electronAPI.loadImagePreview(filePath)`
+- Supported formats are `jpg`, `jpeg`, and `png`
+- The original image file is never copied, moved, renamed, deleted, or processed
+- Missing paths, unsupported extensions, read failures, and missing Electron API are shown as UI states
+
+This preview works only on the same PC where `original_path` points to an existing local file. Multi-device preview will require a future Storage or shared storage design.

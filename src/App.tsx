@@ -39,6 +39,7 @@ type ReviewActionStatus =
   | "承認中"
   | "承認成功"
   | "承認失敗";
+type PreviewStatus = "未選択" | "読み込み中" | "表示中" | "読み込み失敗" | "未対応形式" | "Electron API未接続";
 
 const emptyStats = {
   totalPhotos: 0,
@@ -530,6 +531,9 @@ function Review() {
   const [loadStatus, setLoadStatus] = useState<ReviewLoadStatus>("読み込み中");
   const [actionStatus, setActionStatus] = useState<ReviewActionStatus>("待機中");
   const [message, setMessage] = useState("レビュー待ち写真を読み込んでいます");
+  const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("未選択");
+  const [previewMessage, setPreviewMessage] = useState("写真を選択するとプレビューを読み込みます");
+  const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
 
   const selectedPhoto = photos.find((photo) => photo.id === selectedPhotoId) ?? photos[0] ?? null;
 
@@ -580,6 +584,71 @@ function Review() {
       photographer_name: selectedPhoto.photographer_name ?? "",
       notes: selectedPhoto.notes ?? ""
     });
+  }, [selectedPhoto]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    setPreviewDataUrl(null);
+
+    if (!selectedPhoto) {
+      setPreviewStatus("未選択");
+      setPreviewMessage("写真を選択するとプレビューを読み込みます");
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    if (!selectedPhoto.original_path) {
+      setPreviewStatus("読み込み失敗");
+      setPreviewMessage("original_path が空です");
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    if (!window.electronAPI?.loadImagePreview) {
+      setPreviewStatus("Electron API未接続");
+      setPreviewMessage("Electronウィンドウ内でのみローカル画像をプレビューできます");
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    setPreviewStatus("読み込み中");
+    setPreviewMessage("画像プレビューを読み込んでいます");
+
+    void window.electronAPI
+      .loadImagePreview(selectedPhoto.original_path)
+      .then((result) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        if (result.status === "success" && result.dataUrl) {
+          setPreviewDataUrl(result.dataUrl);
+          setPreviewStatus("表示中");
+          setPreviewMessage(result.message);
+          return;
+        }
+
+        setPreviewDataUrl(null);
+        setPreviewStatus(result.status === "unsupported" ? "未対応形式" : "読み込み失敗");
+        setPreviewMessage(result.message);
+      })
+      .catch(() => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setPreviewDataUrl(null);
+        setPreviewStatus("読み込み失敗");
+        setPreviewMessage("画像ファイルの読み込みに失敗しました");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
   }, [selectedPhoto]);
 
   const updateFormValue = (field: keyof ReviewPhotoForm, value: string) => {
@@ -682,10 +751,16 @@ function Review() {
         </div>
         {selectedPhoto ? (
           <div className="review-detail">
-            <div className="preview-placeholder">
-              <ImageIcon size={36} />
-              <strong>プレビューは次Phaseで実装予定</strong>
-              <span>元画像ファイルは移動・コピーせず original_path で参照します。</span>
+            <div className={`preview-frame ${previewStatus === "表示中" ? "ready" : ""}`}>
+              {previewStatus === "表示中" && previewDataUrl ? (
+                <img src={previewDataUrl} alt={selectedPhoto.original_filename} className="review-preview-image" />
+              ) : (
+                <div className="preview-placeholder">
+                  <ImageIcon size={36} />
+                  <strong>{previewStatus}</strong>
+                  <span>{previewMessage}</span>
+                </div>
+              )}
             </div>
             <dl className="detail-list">
               <div>

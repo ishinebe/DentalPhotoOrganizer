@@ -8,7 +8,8 @@ const preloadSource = `const { contextBridge, ipcRenderer } = require("electron"
 console.log("PRELOAD LOADED");
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  selectImageFolder: () => ipcRenderer.invoke("select-image-folder")
+  selectImageFolder: () => ipcRenderer.invoke("select-image-folder"),
+  loadImagePreview: (filePath) => ipcRenderer.invoke("load-image-preview", filePath)
 });
 `;
 
