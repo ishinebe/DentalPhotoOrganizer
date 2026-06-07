@@ -67,11 +67,11 @@ const emptyStats = {
 };
 
 const navItems: Array<{ id: View; label: string; icon: typeof Gauge }> = [
-  { id: "dashboard", label: "Dashboard", icon: Gauge },
-  { id: "import", label: "Import", icon: FolderDown },
-  { id: "review", label: "Review", icon: ClipboardCheck },
-  { id: "search", label: "Search", icon: Search },
-  { id: "settings", label: "Settings", icon: Settings }
+  { id: "dashboard", label: "ホーム", icon: Gauge },
+  { id: "import", label: "写真取込", icon: FolderDown },
+  { id: "review", label: "写真確認", icon: ClipboardCheck },
+  { id: "search", label: "写真検索", icon: Search },
+  { id: "settings", label: "設定", icon: Settings }
 ];
 
 const patients = [
@@ -562,7 +562,7 @@ function Review() {
   const [form, setForm] = useState<ReviewGroupForm>(emptyReviewForm);
   const [loadStatus, setLoadStatus] = useState<ReviewLoadStatus>("読み込み中");
   const [actionStatus, setActionStatus] = useState<ReviewActionStatus>("待機中");
-  const [message, setMessage] = useState("レビュー待ち撮影セットを読み込んでいます");
+  const [message, setMessage] = useState("確認待ちの患者写真を読み込んでいます");
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("未選択");
   const [previewMessage, setPreviewMessage] = useState("写真を選択するとプレビューを読み込みます");
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
@@ -579,7 +579,7 @@ function Review() {
   const loadGroups = useCallback(async (preferredGroupId?: string | null) => {
     setLoadStatus("読み込み中");
     setActionStatus("待機中");
-    setMessage("レビュー待ち撮影セットを読み込んでいます");
+    setMessage("確認待ちの患者写真を読み込んでいます");
 
     const result = await fetchPendingReviewGroups();
 
@@ -610,7 +610,7 @@ function Review() {
       null;
     setSelectedGroupId(nextSelectedGroupId);
     setLoadStatus(result.groups.length > 0 ? "表示中" : "データなし");
-    setMessage(result.groups.length > 0 ? "レビュー待ち撮影セットを表示しています" : "レビュー待ち撮影セットはありません");
+    setMessage(result.groups.length > 0 ? "確認待ちの患者写真を表示しています" : "未確認の患者写真はありません");
   }, []);
 
   useEffect(() => {
@@ -907,7 +907,7 @@ function Review() {
     <div className="review-layout">
       <aside className="patient-column">
         <div className="column-title">
-          <h2>撮影セット一覧</h2>
+          <h2>患者写真一覧</h2>
           <span>{groups.length}件</span>
         </div>
         <div className={`review-status ${loadStatus === "取得失敗" ? "error" : ""}`}>
@@ -945,7 +945,7 @@ function Review() {
           {groups.length === 0 && (
             <div className="empty-result compact">
               <ClipboardCheck size={24} />
-              <span>{loadStatus === "読み込み中" ? "読み込み中" : "レビュー待ち撮影セットはありません"}</span>
+              <span>{loadStatus === "読み込み中" ? "読み込み中" : "確認待ちの患者写真はありません"}</span>
             </div>
           )}
         </div>
@@ -958,6 +958,13 @@ function Review() {
         </div>
         {selectedGroup ? (
           <div className="review-detail">
+                  <div className="medical-alert-banner">
+      <strong>別患者の写真が混ざっていないか確認してください</strong>
+      <span>
+        患者ごとにまとめられた写真に、別の患者の写真が含まれていないか確認してください。
+        問題がなければ「問題なしで確定」を押してください。
+      </span>
+    </div>
             <div className={`preview-frame ${previewStatus === "表示中" ? "ready" : ""}`}>
               {previewStatus === "表示中" && previewDataUrl ? (
                 <img src={previewDataUrl} alt={selectedPhoto?.original_filename ?? "preview"} className="review-preview-image" />
@@ -969,6 +976,7 @@ function Review() {
                 </div>
               )}
             </div>
+
             <div className="group-photo-grid">
               {groupPhotos.map((photo, index) => (
                 <button
@@ -991,11 +999,11 @@ function Review() {
             </div>
             <div className="group-edit-panel">
               <div className="group-edit-header">
-                <strong>手動撮影セット編集</strong>
+                <strong>写真の振り分け修正</strong>
                 <span>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</span>
               </div>
               <label>
-                移動先撮影セット
+                移動先患者を選択
                 <select
                   value={moveTargetGroupId}
                   onChange={(event) => setMoveTargetGroupId(event.target.value)}
@@ -1014,10 +1022,10 @@ function Review() {
                   onClick={handleMovePhoto}
                   disabled={!selectedPhoto || !moveTargetGroupId || isBusy}
                 >
-                  別の撮影セットへ移動
+                  別の患者へ移動
                 </button>
                 <button type="button" onClick={handleSplitPhoto} disabled={!selectedPhoto || isBusy}>
-                  新しい撮影セットへ分離
+                  新しい患者として分離
                 </button>
               </div>
             </div>
@@ -1114,9 +1122,10 @@ function Review() {
               placeholder="UUID"
             />
           </label>
+{/*
           <div className="group-merge-panel">
             <label>
-              統合先撮影セット
+              移動先の患者を選択
               <select
                 value={mergeTargetGroupId}
                 onChange={(event) => setMergeTargetGroupId(event.target.value)}
@@ -1135,15 +1144,16 @@ function Review() {
               onClick={handleMergeGroup}
               disabled={!selectedGroup || !mergeTargetGroupId || isBusy}
             >
-              他の撮影セットと統合
+              別の患者に移動
             </button>
           </div>
+*/}
           <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
-            レビュー内容を保存
+            内容を保存
           </button>
           <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
             <CheckCircle2 size={18} />
-            レビュー完了
+            問題無しで確定
           </button>
           <p className="review-action-message">{message}</p>
         </form>
@@ -1151,6 +1161,7 @@ function Review() {
     </div>
   );
 }
+
 
 function SearchView() {
   return (

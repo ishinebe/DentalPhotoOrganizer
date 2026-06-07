@@ -1080,3 +1080,50 @@ textarea:focus {
   color: #1d2939;
   font-weight: 700;
 }
+
+.medical-alert-banner {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e40af;
+  background: #eff6ff;
+}
+
+.medical-alert-banner strong {
+  color: #1e3a8a;
+  font-size: 0.95rem;
+}
+
+.medical-alert-banner span {
+  font-size: 0.84rem;
+}
+.confirm-action-area {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #edf2f7;
+}
+
+.confirm-note {
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.save-draft-button {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #cbd8e5;
+  border-radius: 8px;
+  color: #24527a;
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.save-draft-button:hover {
+  border-color: #2474c9;
+  color: #1265b4;
+  background: #eef6ff;
+}
