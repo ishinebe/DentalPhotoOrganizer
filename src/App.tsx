@@ -142,8 +142,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 3-B</span>
-          <strong>Group review workflow</strong>
+          <span>Phase 4-B</span>
+          <strong>撮影セット確認</strong>
         </div>
       </aside>
 
@@ -973,7 +973,7 @@ function Review() {
       <div className="review-layout">
       <aside className="patient-column">
         <div className="column-title">
-          <h2>患者写真一覧</h2>
+          <h2>撮影セット一覧</h2>
           <span>{groups.length}件</span>
         </div>
         <div className={`review-status ${loadStatus === "取得失敗" ? "error" : ""}`}>
@@ -1019,7 +1019,7 @@ function Review() {
           {groups.length === 0 && (
             <div className="empty-result compact">
               <ClipboardCheck size={24} />
-              <span>{loadStatus === "読み込み中" ? "読み込み中" : "確認待ちの患者写真はありません"}</span>
+              <span>{loadStatus === "読み込み中" ? "読み込み中" : "レビュー待ち撮影セットはありません"}</span>
             </div>
           )}
         </div>
@@ -1077,7 +1077,7 @@ function Review() {
                 <span>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</span>
               </div>
               <label>
-                移動先患者を選択
+                移動先撮影セット
                 <select
                   value={moveTargetGroupId}
                   onChange={(event) => setMoveTargetGroupId(event.target.value)}
@@ -1096,10 +1096,10 @@ function Review() {
                   onClick={handleMovePhoto}
                   disabled={!selectedPhoto || !moveTargetGroupId || isBusy}
                 >
-                  別の患者へ移動
+                  別の撮影セットへ移動
                 </button>
                 <button type="button" onClick={handleSplitPhoto} disabled={!selectedPhoto || isBusy}>
-                  新しい患者として分離
+                  新しい撮影セットへ分離
                 </button>
               </div>
             </div>
@@ -1196,10 +1196,9 @@ function Review() {
               placeholder="UUID"
             />
           </label>
-{/*
           <div className="group-merge-panel">
             <label>
-              移動先の患者を選択
+              統合先撮影セット
               <select
                 value={mergeTargetGroupId}
                 onChange={(event) => setMergeTargetGroupId(event.target.value)}
@@ -1218,16 +1217,15 @@ function Review() {
               onClick={handleMergeGroup}
               disabled={!selectedGroup || !mergeTargetGroupId || isBusy}
             >
-              別の患者に移動
+              他の撮影セットと統合
             </button>
           </div>
-*/}
           <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
             内容を保存
           </button>
           <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
             <CheckCircle2 size={18} />
-            問題無しで確定
+            問題なしで確定
           </button>
           <p className="review-action-message">{message}</p>
         </form>
@@ -1308,7 +1306,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.5.0 Phase 3-B</dd>
+            <dd>0.5.0 Phase 4-B</dd>
           </div>
           <div>
             <dt>構成</dt>
