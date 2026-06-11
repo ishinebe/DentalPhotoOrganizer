@@ -431,10 +431,44 @@ The current real `photo_groups` schema does not have a dedicated provisional pat
 The Review screen includes a development button:
 
 ```text
-QR境界で再グループ化
+QR境界で撮影セット再作成
 ```
 
 This button removes group memberships for pending photos, deletes empty pending groups, and recreates pending shooting sets from QR filename boundaries. It never modifies image files or approved photos.
+
+## Phase4-B review set list UI
+
+The Review screen shooting set list now displays operational review signals for each pending set:
+
+- Shooting set number
+- Patient ID candidate from `photo_groups.patient_id` or the QR filename-derived candidate
+- Photo count
+- QRあり / QRなし
+- Review status label
+- 要確認 label
+- Representative thumbnail
+
+The 要確認 label is shown when any of these conditions are true:
+
+- The set has no QR image
+- The set has no patient ID candidate
+- The set has only 1 photo
+- The set has 10 or more photos
+
+Representative thumbnail selection:
+
+1. First non-QR image in the shooting set
+2. First image if the set contains only QR images
+3. Icon fallback if Electron image preview is unavailable or loading fails
+
+Real environment verification:
+
+1. Start the app with `.env` configured.
+2. Open Review.
+3. Confirm the left list shows patient candidates, QRあり / QRなし, photo count, status, 要確認, and thumbnails.
+4. Confirm existing preview, review save, review completion, move, split, and merge operations still work.
+
+If `.env` is not configured in the Codex environment, live Supabase verification can be skipped. The UI keeps the existing Supabase未設定 fallback.
 
 Manual verification SQL:
 

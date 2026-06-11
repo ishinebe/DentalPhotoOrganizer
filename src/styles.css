@@ -631,6 +631,21 @@ h3 {
   font-size: 0.86rem;
 }
 
+.review-page {
+  display: grid;
+  gap: 14px;
+}
+
+.review-guidance {
+  padding: 12px 14px;
+  border: 1px solid #d8e3ee;
+  border-radius: 8px;
+  color: #344054;
+  background: #f8fbff;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
 .review-layout {
   display: grid;
   grid-template-columns: 270px minmax(420px, 1fr) 330px;
@@ -698,6 +713,78 @@ h3 {
   color: #667085;
   font-size: 0.82rem;
   font-style: normal;
+}
+
+.patient-item.set-item {
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 92px;
+}
+
+.set-thumbnail {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  overflow: hidden;
+  border: 1px solid #d8e3ee;
+  border-radius: 8px;
+  color: #5d83a8;
+  background: #eef4fa;
+}
+
+.set-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.set-summary {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.set-summary strong,
+.set-summary span,
+.set-summary small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-summary small {
+  color: #667085;
+  font-size: 0.76rem;
+}
+
+.set-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.set-badges em,
+.set-badges b {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  line-height: 1;
+}
+
+.set-badges em {
+  color: #1265b4;
+  background: #e8f2ff;
+}
+
+.set-badges b {
+  color: #9a3412;
+  background: #fff1e8;
+  font-weight: 700;
 }
 
 .thumbnail-grid {

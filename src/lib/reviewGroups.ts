@@ -18,6 +18,10 @@ export type ReviewGroup = {
   patient_uuid: string | null;
   photo_count: number;
   qr_patient_candidate: string | null;
+  has_qr_photo: boolean;
+  needs_review_label: boolean;
+  representative_photo_path: string | null;
+  representative_photo_filename: string | null;
 };
 
 export type ReviewGroupPhoto = {
@@ -102,7 +106,10 @@ const photoColumns = [
   "approved_at"
 ].join(",");
 
-type GroupRow = Omit<ReviewGroup, "photo_count" | "qr_patient_candidate">;
+type GroupRow = Omit<
+  ReviewGroup,
+  "photo_count" | "qr_patient_candidate" | "has_qr_photo" | "needs_review_label" | "representative_photo_path" | "representative_photo_filename"
+>;
 type PhotoRow = Omit<ReviewGroupPhoto, "sort_order">;
 type GroupItemRow = {
   photo_id: string;
@@ -113,6 +120,13 @@ type GroupItemRow = {
 type PhotoSet = {
   qrPatientCandidate: string | null;
   photos: PhotoRow[];
+};
+
+type GroupDisplaySummary = {
+  qrPatientCandidate: string | null;
+  hasQrPhoto: boolean;
+  representativePhotoPath: string | null;
+  representativePhotoFilename: string | null;
 };
 
 let pendingEnsureGroupsPromise: Promise<EnsureGroupsResult> | null = null;
@@ -132,7 +146,7 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
     return {
       status: "not-configured",
       groups: [],
-      message: "Supabase未設定のためレビューグループを取得できません"
+      message: "Supabase未設定のためレビュー撮影セットを取得できません"
     };
   }
 
@@ -163,18 +177,28 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
   const groups = (data ?? []) as unknown as GroupRow[];
   const memberships = await fetchGroupPhotoMemberships(groups.map((group) => group.id));
   const visibleGroupIds = selectFirstGroupPerPhoto(groups, memberships.items);
-  const qrPatientCandidates = await fetchGroupQrPatientCandidates(memberships.items);
+  const displaySummaries = await fetchGroupDisplaySummaries(memberships.items);
 
   return {
     status: "success",
     groups: groups
       .filter((group) => visibleGroupIds.has(group.id) && (memberships.counts.get(group.id) ?? 0) > 0)
-      .map((group) => ({
-        ...group,
-        photo_count: memberships.counts.get(group.id) ?? 0,
-        qr_patient_candidate: qrPatientCandidates.get(group.id) ?? null
-      })),
-    message: "レビュー待ちグループを取得しました"
+      .map((group) => {
+        const photoCount = memberships.counts.get(group.id) ?? 0;
+        const summary = displaySummaries.get(group.id);
+        const patientCandidate = group.patient_id ?? summary?.qrPatientCandidate ?? null;
+
+        return {
+          ...group,
+          photo_count: photoCount,
+          qr_patient_candidate: summary?.qrPatientCandidate ?? null,
+          has_qr_photo: summary?.hasQrPhoto ?? false,
+          needs_review_label: !summary?.hasQrPhoto || !patientCandidate || photoCount === 1 || photoCount >= 10,
+          representative_photo_path: summary?.representativePhotoPath ?? null,
+          representative_photo_filename: summary?.representativePhotoFilename ?? null
+        };
+      }),
+    message: "レビュー待ち撮影セットを取得しました"
   };
 }
 
@@ -183,7 +207,7 @@ export async function fetchReviewGroupPhotos(groupId: string): Promise<ReviewGro
     return {
       status: "not-configured",
       photos: [],
-      message: "Supabase未設定のためグループ内写真を取得できません"
+      message: "Supabase未設定のため撮影セット内写真を取得できません"
     };
   }
 
@@ -208,7 +232,7 @@ export async function fetchReviewGroupPhotos(groupId: string): Promise<ReviewGro
     return {
       status: "success",
       photos: [],
-      message: "このグループには写真がありません"
+      message: "この撮影セットには写真がありません"
     };
   }
 
@@ -236,7 +260,7 @@ export async function fetchReviewGroupPhotos(groupId: string): Promise<ReviewGro
   return {
     status: "success",
     photos,
-    message: "グループ内写真を取得しました"
+    message: "撮影セット内写真を取得しました"
   };
 }
 
@@ -277,13 +301,29 @@ export async function updateReviewGroupMetadata(
   }
 
   const photoIds = await fetchPhotoIdsForGroup(groupId);
+  const displaySummaries = await fetchGroupDisplaySummaries(
+    photoIds.ids.map((photoId, index) => ({
+      photo_id: photoId,
+      photo_group_id: groupId,
+      sort_order: index + 1
+    }))
+  );
+  const displaySummary = displaySummaries.get(groupId);
 
   return {
     status: "success",
     group: {
       ...((data as unknown as GroupRow) ?? {}),
       photo_count: photoIds.ids.length,
-      qr_patient_candidate: null
+      qr_patient_candidate: displaySummary?.qrPatientCandidate ?? null,
+      has_qr_photo: displaySummary?.hasQrPhoto ?? false,
+      needs_review_label:
+        !displaySummary?.hasQrPhoto ||
+        !(((data as unknown as GroupRow) ?? {}).patient_id ?? displaySummary?.qrPatientCandidate ?? null) ||
+        photoIds.ids.length === 1 ||
+        photoIds.ids.length >= 10,
+      representative_photo_path: displaySummary?.representativePhotoPath ?? null,
+      representative_photo_filename: displaySummary?.representativePhotoFilename ?? null
     },
     message: "レビュー内容を保存しました"
   };
@@ -341,13 +381,29 @@ export async function completeReviewGroup(groupId: string): Promise<ReviewGroupM
       };
     }
   }
+  const displaySummaries = await fetchGroupDisplaySummaries(
+    photoIds.ids.map((photoId, index) => ({
+      photo_id: photoId,
+      photo_group_id: groupId,
+      sort_order: index + 1
+    }))
+  );
+  const displaySummary = displaySummaries.get(groupId);
 
   return {
     status: "success",
     group: {
       ...((data as unknown as GroupRow) ?? {}),
       photo_count: photoIds.ids.length,
-      qr_patient_candidate: null
+      qr_patient_candidate: displaySummary?.qrPatientCandidate ?? null,
+      has_qr_photo: displaySummary?.hasQrPhoto ?? false,
+      needs_review_label:
+        !displaySummary?.hasQrPhoto ||
+        !(((data as unknown as GroupRow) ?? {}).patient_id ?? displaySummary?.qrPatientCandidate ?? null) ||
+        photoIds.ids.length === 1 ||
+        photoIds.ids.length >= 10,
+      representative_photo_path: displaySummary?.representativePhotoPath ?? null,
+      representative_photo_filename: displaySummary?.representativePhotoFilename ?? null
     },
     message: "レビュー完了にしました"
   };
@@ -732,7 +788,7 @@ async function fetchPhotoIdsForGroup(groupId: string) {
   return {
     status: "success" as const,
     ids: ((data ?? []) as unknown as Array<{ photo_id: string }>).map((item) => item.photo_id),
-    message: "グループ内写真IDを取得しました"
+    message: "撮影セット内写真IDを取得しました"
   };
 }
 
@@ -886,18 +942,21 @@ async function createPhotoGroupForSet(photoSet: PhotoSet): Promise<ReviewGroupEd
   };
 }
 
-async function fetchGroupQrPatientCandidates(items: GroupItemRow[]) {
-  const candidates = new Map<string, string | null>();
+async function fetchGroupDisplaySummaries(items: GroupItemRow[]) {
+  const summaries = new Map<string, GroupDisplaySummary>();
 
   if (!supabase || items.length === 0) {
-    return candidates;
+    return summaries;
   }
 
   const photoIds = [...new Set(items.map((item) => item.photo_id))];
-  const { data, error } = await supabase.from("photos").select("id,original_filename,imported_at").in("id", photoIds);
+  const { data, error } = await supabase
+    .from("photos")
+    .select("id,original_filename,original_path,imported_at")
+    .in("id", photoIds);
 
   if (error) {
-    return candidates;
+    return summaries;
   }
 
   const photoById = new Map(((data ?? []) as unknown as PhotoRow[]).map((photo) => [photo.id, photo]));
@@ -914,10 +973,17 @@ async function fetchGroupQrPatientCandidates(items: GroupItemRow[]) {
       groupItems.map((item) => photoById.get(item.photo_id)).filter((photo): photo is PhotoRow => Boolean(photo))
     );
     const qrPhoto = groupPhotos.find((photo) => isQrBoundaryFilename(photo.original_filename));
-    candidates.set(groupId, qrPhoto ? extractQrPatientCandidate(qrPhoto.original_filename) : null);
+    const representativePhoto =
+      groupPhotos.find((photo) => !isQrBoundaryFilename(photo.original_filename)) ?? groupPhotos[0] ?? null;
+    summaries.set(groupId, {
+      qrPatientCandidate: qrPhoto ? extractQrPatientCandidate(qrPhoto.original_filename) : null,
+      hasQrPhoto: Boolean(qrPhoto),
+      representativePhotoPath: representativePhoto?.original_path ?? null,
+      representativePhotoFilename: representativePhoto?.original_filename ?? null
+    });
   }
 
-  return candidates;
+  return summaries;
 }
 
 async function deleteEmptyPendingGroups() {

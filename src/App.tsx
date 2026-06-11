@@ -54,9 +54,9 @@ type ReviewActionStatus =
   | "統合中"
   | "統合成功"
   | "統合失敗"
-  | "再グループ化中"
-  | "再グループ化成功"
-  | "再グループ化失敗";
+  | "セット再作成中"
+  | "セット再作成成功"
+  | "セット再作成失敗";
 type PreviewStatus = "未選択" | "読み込み中" | "表示中" | "読み込み失敗" | "未対応形式" | "Electron API未接続";
 
 const emptyStats = {
@@ -544,9 +544,29 @@ function formatDateTime(value: string | null) {
 }
 
 function formatGroupOption(group: ReviewGroup) {
-  const patientCandidate = group.patient_id ?? group.qr_patient_candidate;
+  const patientCandidate = getGroupPatientCandidate(group);
   const label = patientCandidate ? `患者候補 ${patientCandidate}` : `撮影セット ${group.id.slice(0, 8)}`;
   return `${label} / ${group.photo_count}枚`;
+}
+
+function getGroupPatientCandidate(group: ReviewGroup) {
+  return group.patient_id ?? group.qr_patient_candidate;
+}
+
+function getReviewStatusLabel(status: ReviewGroup["review_status"]) {
+  if (status === "pending") {
+    return "未確認";
+  }
+
+  if (status === "approved") {
+    return "レビュー完了";
+  }
+
+  if (status === "reviewing") {
+    return "確認中";
+  }
+
+  return "差し戻し";
 }
 
 function getPhotoSlotLabel(index: number) {
@@ -566,6 +586,7 @@ function Review() {
   const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("未選択");
   const [previewMessage, setPreviewMessage] = useState("写真を選択するとプレビューを読み込みます");
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
+  const [setThumbnailUrls, setSetThumbnailUrls] = useState<Record<string, string>>({});
   const [moveTargetGroupId, setMoveTargetGroupId] = useState("");
   const [mergeTargetGroupId, setMergeTargetGroupId] = useState("");
 
@@ -616,6 +637,47 @@ function Review() {
   useEffect(() => {
     void loadGroups();
   }, [loadGroups]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    const previewApi = window.electronAPI?.loadImagePreview;
+    const thumbnailTargets = groups
+      .filter((group) => group.representative_photo_path)
+      .slice(0, 30)
+      .map((group) => ({
+        groupId: group.id,
+        path: group.representative_photo_path as string
+      }));
+
+    setSetThumbnailUrls({});
+
+    if (!previewApi || thumbnailTargets.length === 0) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void Promise.all(
+      thumbnailTargets.map(async (target) => {
+        try {
+          const result = await previewApi(target.path);
+          return result.status === "success" && result.dataUrl ? [target.groupId, result.dataUrl] : null;
+        } catch {
+          return null;
+        }
+      })
+    ).then((entries) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      setSetThumbnailUrls(Object.fromEntries(entries.filter((entry): entry is [string, string] => Boolean(entry))));
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [groups]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -869,25 +931,25 @@ function Review() {
 
   const handleRegroupByQrBoundaries = async () => {
     const confirmed = window.confirm(
-      "pending写真のグループ所属を整理し、ファイル名のQR境界で撮影セットを再作成します。approved写真と元画像ファイルは変更しません。よろしいですか？"
+      "pending写真の撮影セット所属を整理し、ファイル名のQR境界で撮影セットを再作成します。approved写真と元画像ファイルは変更しません。よろしいですか？"
     );
 
     if (!confirmed) {
       return;
     }
 
-    setActionStatus("再グループ化中");
-    setMessage("QR境界で撮影セットを再グループ化しています");
+    setActionStatus("セット再作成中");
+    setMessage("QR境界で撮影セットを再作成しています");
 
     const result = await regroupPendingPhotosByQrBoundaries();
 
     if (result.status !== "success") {
-      setActionStatus("再グループ化失敗");
+      setActionStatus("セット再作成失敗");
       setMessage(result.message);
       return;
     }
 
-    setActionStatus("再グループ化成功");
+    setActionStatus("セット再作成成功");
     setMessage(result.message);
     setGroupPhotos([]);
     setSelectedPhotoId(null);
@@ -900,11 +962,15 @@ function Review() {
     actionStatus === "移動中" ||
     actionStatus === "分離中" ||
     actionStatus === "統合中" ||
-    actionStatus === "再グループ化中" ||
+    actionStatus === "セット再作成中" ||
     loadStatus === "読み込み中";
 
   return (
-    <div className="review-layout">
+    <div className="review-page">
+      <div className="review-guidance">
+        QRコード画像を境界として自動作成された撮影セットです。患者ID候補と写真のまとまりを確認してください。
+      </div>
+      <div className="review-layout">
       <aside className="patient-column">
         <div className="column-title">
           <h2>患者写真一覧</h2>
@@ -919,27 +985,35 @@ function Review() {
           再読み込み
         </button>
         <button className="review-refresh-button" type="button" onClick={handleRegroupByQrBoundaries} disabled={isBusy}>
-          QR境界で再グループ化
+          QR境界で撮影セット再作成
         </button>
         <div className="patient-list review-photo-list">
-          {groups.map((group) => (
+          {groups.map((group, index) => (
             <button
               key={group.id}
-              className={selectedGroup?.id === group.id ? "patient-item active" : "patient-item"}
+              className={selectedGroup?.id === group.id ? "patient-item set-item active" : "patient-item set-item"}
               onClick={() => setSelectedGroupId(group.id)}
               type="button"
             >
-              <strong>
-                {group.patient_id || group.qr_patient_candidate
-                  ? `患者候補 ${group.patient_id ?? group.qr_patient_candidate}`
-                  : `撮影セット ${group.id.slice(0, 8)}`}
-              </strong>
-              <span>
-                {group.photo_count}枚 / {group.patient_id ?? group.qr_patient_candidate ?? "患者ID候補なし"}
-              </span>
-              <em>
-                {group.review_status} / {formatDateTime(group.created_at)}
-              </em>
+              <div className="set-thumbnail">
+                {setThumbnailUrls[group.id] ? (
+                  <img src={setThumbnailUrls[group.id]} alt={group.representative_photo_filename ?? `撮影セット ${index + 1}`} />
+                ) : (
+                  <ImageIcon size={22} />
+                )}
+              </div>
+              <div className="set-summary">
+                <strong>撮影セット {index + 1}</strong>
+                <span>患者ID候補: {getGroupPatientCandidate(group) ?? "なし"}</span>
+                <span>
+                  {group.photo_count}枚 / {group.has_qr_photo ? "QRあり" : "QRなし"}
+                </span>
+                <div className="set-badges">
+                  <em>{getReviewStatusLabel(group.review_status)}</em>
+                  {group.needs_review_label && <b>要確認</b>}
+                </div>
+                <small>{formatDateTime(group.created_at)}</small>
+              </div>
             </button>
           ))}
           {groups.length === 0 && (
@@ -1158,6 +1232,7 @@ function Review() {
           <p className="review-action-message">{message}</p>
         </form>
       </aside>
+      </div>
     </div>
   );
 }
