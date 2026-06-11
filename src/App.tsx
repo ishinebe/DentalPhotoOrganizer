@@ -549,8 +549,8 @@ function formatGroupOption(group: ReviewGroup) {
   return `${label} / ${group.photo_count}枚`;
 }
 
-function getGroupPatientCandidate(group: ReviewGroup) {
-  return group.patient_id ?? group.qr_patient_candidate;
+function getGroupPatientCandidate(group: ReviewGroup | null) {
+  return group?.patient_id ?? group?.qr_patient_candidate ?? null;
 }
 
 function getReviewStatusLabel(status: ReviewGroup["review_status"]) {
@@ -567,6 +567,14 @@ function getReviewStatusLabel(status: ReviewGroup["review_status"]) {
   }
 
   return "差し戻し";
+}
+
+function getAttentionReasonText(group: ReviewGroup | null) {
+  return group?.attention_reasons.length ? group.attention_reasons.join(" / ") : "なし";
+}
+
+function isQrPhoto(photo: ReviewGroupPhoto | null) {
+  return Boolean(photo?.original_filename.toLowerCase().includes("qr"));
 }
 
 function getPhotoSlotLabel(index: number) {
@@ -587,11 +595,14 @@ function Review() {
   const [previewMessage, setPreviewMessage] = useState("写真を選択するとプレビューを読み込みます");
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [setThumbnailUrls, setSetThumbnailUrls] = useState<Record<string, string>>({});
+  const [photoThumbnailUrls, setPhotoThumbnailUrls] = useState<Record<string, string>>({});
   const [moveTargetGroupId, setMoveTargetGroupId] = useState("");
   const [mergeTargetGroupId, setMergeTargetGroupId] = useState("");
 
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
   const selectedPhoto = groupPhotos.find((photo) => photo.id === selectedPhotoId) ?? groupPhotos[0] ?? null;
+  const selectedPatientCandidate = getGroupPatientCandidate(selectedGroup);
+  const selectedAttentionReasons = getAttentionReasonText(selectedGroup);
   const otherGroups = useMemo(
     () => (selectedGroup ? groups.filter((group) => group.id !== selectedGroup.id) : []),
     [groups, selectedGroup]
@@ -678,6 +689,47 @@ function Review() {
       isCurrent = false;
     };
   }, [groups]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    const previewApi = window.electronAPI?.loadImagePreview;
+    const thumbnailTargets = groupPhotos
+      .filter((photo) => photo.original_path)
+      .slice(0, 24)
+      .map((photo) => ({
+        photoId: photo.id,
+        path: photo.original_path as string
+      }));
+
+    setPhotoThumbnailUrls({});
+
+    if (!previewApi || thumbnailTargets.length === 0) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void Promise.all(
+      thumbnailTargets.map(async (target) => {
+        try {
+          const result = await previewApi(target.path);
+          return result.status === "success" && result.dataUrl ? [target.photoId, result.dataUrl] : null;
+        } catch {
+          return null;
+        }
+      })
+    ).then((entries) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      setPhotoThumbnailUrls(Object.fromEntries(entries.filter((entry): entry is [string, string] => Boolean(entry))));
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [groupPhotos]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -828,6 +880,16 @@ function Review() {
   const handleApprove = async () => {
     if (!selectedGroup) {
       return;
+    }
+
+    if (selectedGroup.needs_review_label) {
+      const confirmed = window.confirm(
+        `この撮影セットは要確認です。\n理由: ${getAttentionReasonText(selectedGroup)}\nそれでも「問題なしで確定」しますか？`
+      );
+
+      if (!confirmed) {
+        return;
+      }
     }
 
     setActionStatus("承認中");
@@ -1012,6 +1074,7 @@ function Review() {
                   <em>{getReviewStatusLabel(group.review_status)}</em>
                   {group.needs_review_label && <b>要確認</b>}
                 </div>
+                {group.needs_review_label && <small className="attention-reasons">理由: {getAttentionReasonText(group)}</small>}
                 <small>{formatDateTime(group.created_at)}</small>
               </div>
             </button>
@@ -1032,14 +1095,31 @@ function Review() {
         </div>
         {selectedGroup ? (
           <div className="review-detail">
-                  <div className="medical-alert-banner">
-      <strong>別患者の写真が混ざっていないか確認してください</strong>
-      <span>
-        患者ごとにまとめられた写真に、別の患者の写真が含まれていないか確認してください。
-        問題がなければ「問題なしで確定」を押してください。
-      </span>
-    </div>
+            <section className={selectedGroup.needs_review_label ? "set-overview attention" : "set-overview"}>
+              <div className="set-overview-header">
+                <div>
+                  <h3>撮影セット概要</h3>
+                  <p>患者ID候補: {selectedPatientCandidate ?? "なし"}</p>
+                </div>
+                {selectedGroup.needs_review_label ? <strong>要確認</strong> : <strong className="clear">通常確認</strong>}
+              </div>
+              <dl>
+                <div>
+                  <dt>写真枚数</dt>
+                  <dd>{selectedGroup.photo_count}枚</dd>
+                </div>
+                <div>
+                  <dt>QR</dt>
+                  <dd>{selectedGroup.has_qr_photo ? `QRあり (${selectedGroup.qr_photo_count}枚)` : "QRなし"}</dd>
+                </div>
+                <div>
+                  <dt>要確認理由</dt>
+                  <dd>{selectedAttentionReasons}</dd>
+                </div>
+              </dl>
+            </section>
             <div className={`preview-frame ${previewStatus === "表示中" ? "ready" : ""}`}>
+              {isQrPhoto(selectedPhoto) && <span className="preview-type-badge">QR画像</span>}
               {previewStatus === "表示中" && previewDataUrl ? (
                 <img src={previewDataUrl} alt={selectedPhoto?.original_filename ?? "preview"} className="review-preview-image" />
               ) : (
@@ -1059,7 +1139,14 @@ function Review() {
                   type="button"
                   onClick={() => setSelectedPhotoId(photo.id)}
                 >
-                  <ImageIcon size={18} />
+                  <span className="group-photo-thumb">
+                    {photoThumbnailUrls[photo.id] ? (
+                      <img src={photoThumbnailUrls[photo.id]} alt={photo.original_filename} />
+                    ) : (
+                      <ImageIcon size={18} />
+                    )}
+                    {isQrPhoto(photo) && <em>QR</em>}
+                  </span>
                   <strong>{getPhotoSlotLabel(index)}</strong>
                   <span>{photo.original_filename}</span>
                 </button>
@@ -1073,7 +1160,7 @@ function Review() {
             </div>
             <div className="group-edit-panel">
               <div className="group-edit-header">
-                <strong>写真の振り分け修正</strong>
+                <strong>選択中の写真を修正</strong>
                 <span>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</span>
               </div>
               <label>
@@ -1196,6 +1283,10 @@ function Review() {
               placeholder="UUID"
             />
           </label>
+          <div className="review-button-notes">
+            <p>レビュー内容を保存: 入力内容だけを一時保存します。写真の確認完了にはなりません。</p>
+            <p>問題なしで確定: この撮影セットを確認済みにします。</p>
+          </div>
           <div className="group-merge-panel">
             <label>
               統合先撮影セット

@@ -19,7 +19,9 @@ export type ReviewGroup = {
   photo_count: number;
   qr_patient_candidate: string | null;
   has_qr_photo: boolean;
+  qr_photo_count: number;
   needs_review_label: boolean;
+  attention_reasons: string[];
   representative_photo_path: string | null;
   representative_photo_filename: string | null;
 };
@@ -108,7 +110,14 @@ const photoColumns = [
 
 type GroupRow = Omit<
   ReviewGroup,
-  "photo_count" | "qr_patient_candidate" | "has_qr_photo" | "needs_review_label" | "representative_photo_path" | "representative_photo_filename"
+  | "photo_count"
+  | "qr_patient_candidate"
+  | "has_qr_photo"
+  | "qr_photo_count"
+  | "needs_review_label"
+  | "attention_reasons"
+  | "representative_photo_path"
+  | "representative_photo_filename"
 >;
 type PhotoRow = Omit<ReviewGroupPhoto, "sort_order">;
 type GroupItemRow = {
@@ -125,6 +134,7 @@ type PhotoSet = {
 type GroupDisplaySummary = {
   qrPatientCandidate: string | null;
   hasQrPhoto: boolean;
+  qrPhotoCount: number;
   representativePhotoPath: string | null;
   representativePhotoFilename: string | null;
 };
@@ -187,13 +197,21 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
         const photoCount = memberships.counts.get(group.id) ?? 0;
         const summary = displaySummaries.get(group.id);
         const patientCandidate = group.patient_id ?? summary?.qrPatientCandidate ?? null;
+        const attentionReasons = buildAttentionReasons({
+          hasQrPhoto: summary?.hasQrPhoto ?? false,
+          patientCandidate,
+          photoCount,
+          qrPhotoCount: summary?.qrPhotoCount ?? 0
+        });
 
         return {
           ...group,
           photo_count: photoCount,
           qr_patient_candidate: summary?.qrPatientCandidate ?? null,
           has_qr_photo: summary?.hasQrPhoto ?? false,
-          needs_review_label: !summary?.hasQrPhoto || !patientCandidate || photoCount === 1 || photoCount >= 10,
+          qr_photo_count: summary?.qrPhotoCount ?? 0,
+          needs_review_label: attentionReasons.length > 0,
+          attention_reasons: attentionReasons,
           representative_photo_path: summary?.representativePhotoPath ?? null,
           representative_photo_filename: summary?.representativePhotoFilename ?? null
         };
@@ -309,19 +327,25 @@ export async function updateReviewGroupMetadata(
     }))
   );
   const displaySummary = displaySummaries.get(groupId);
+  const savedGroup = (data as unknown as GroupRow) ?? {};
+  const patientCandidate = savedGroup.patient_id ?? displaySummary?.qrPatientCandidate ?? null;
+  const attentionReasons = buildAttentionReasons({
+    hasQrPhoto: displaySummary?.hasQrPhoto ?? false,
+    patientCandidate,
+    photoCount: photoIds.ids.length,
+    qrPhotoCount: displaySummary?.qrPhotoCount ?? 0
+  });
 
   return {
     status: "success",
     group: {
-      ...((data as unknown as GroupRow) ?? {}),
+      ...savedGroup,
       photo_count: photoIds.ids.length,
       qr_patient_candidate: displaySummary?.qrPatientCandidate ?? null,
       has_qr_photo: displaySummary?.hasQrPhoto ?? false,
-      needs_review_label:
-        !displaySummary?.hasQrPhoto ||
-        !(((data as unknown as GroupRow) ?? {}).patient_id ?? displaySummary?.qrPatientCandidate ?? null) ||
-        photoIds.ids.length === 1 ||
-        photoIds.ids.length >= 10,
+      qr_photo_count: displaySummary?.qrPhotoCount ?? 0,
+      needs_review_label: attentionReasons.length > 0,
+      attention_reasons: attentionReasons,
       representative_photo_path: displaySummary?.representativePhotoPath ?? null,
       representative_photo_filename: displaySummary?.representativePhotoFilename ?? null
     },
@@ -389,19 +413,25 @@ export async function completeReviewGroup(groupId: string): Promise<ReviewGroupM
     }))
   );
   const displaySummary = displaySummaries.get(groupId);
+  const completedGroup = (data as unknown as GroupRow) ?? {};
+  const patientCandidate = completedGroup.patient_id ?? displaySummary?.qrPatientCandidate ?? null;
+  const attentionReasons = buildAttentionReasons({
+    hasQrPhoto: displaySummary?.hasQrPhoto ?? false,
+    patientCandidate,
+    photoCount: photoIds.ids.length,
+    qrPhotoCount: displaySummary?.qrPhotoCount ?? 0
+  });
 
   return {
     status: "success",
     group: {
-      ...((data as unknown as GroupRow) ?? {}),
+      ...completedGroup,
       photo_count: photoIds.ids.length,
       qr_patient_candidate: displaySummary?.qrPatientCandidate ?? null,
       has_qr_photo: displaySummary?.hasQrPhoto ?? false,
-      needs_review_label:
-        !displaySummary?.hasQrPhoto ||
-        !(((data as unknown as GroupRow) ?? {}).patient_id ?? displaySummary?.qrPatientCandidate ?? null) ||
-        photoIds.ids.length === 1 ||
-        photoIds.ids.length >= 10,
+      qr_photo_count: displaySummary?.qrPhotoCount ?? 0,
+      needs_review_label: attentionReasons.length > 0,
+      attention_reasons: attentionReasons,
       representative_photo_path: displaySummary?.representativePhotoPath ?? null,
       representative_photo_filename: displaySummary?.representativePhotoFilename ?? null
     },
@@ -972,18 +1002,56 @@ async function fetchGroupDisplaySummaries(items: GroupItemRow[]) {
     const groupPhotos = sortPhotosForQrBoundaryGrouping(
       groupItems.map((item) => photoById.get(item.photo_id)).filter((photo): photo is PhotoRow => Boolean(photo))
     );
-    const qrPhoto = groupPhotos.find((photo) => isQrBoundaryFilename(photo.original_filename));
+    const qrPhotos = groupPhotos.filter((photo) => isQrBoundaryFilename(photo.original_filename));
+    const qrPhoto = qrPhotos[0] ?? null;
     const representativePhoto =
       groupPhotos.find((photo) => !isQrBoundaryFilename(photo.original_filename)) ?? groupPhotos[0] ?? null;
     summaries.set(groupId, {
       qrPatientCandidate: qrPhoto ? extractQrPatientCandidate(qrPhoto.original_filename) : null,
       hasQrPhoto: Boolean(qrPhoto),
+      qrPhotoCount: qrPhotos.length,
       representativePhotoPath: representativePhoto?.original_path ?? null,
       representativePhotoFilename: representativePhoto?.original_filename ?? null
     });
   }
 
   return summaries;
+}
+
+function buildAttentionReasons({
+  hasQrPhoto,
+  patientCandidate,
+  photoCount,
+  qrPhotoCount
+}: {
+  hasQrPhoto: boolean;
+  patientCandidate: string | null;
+  photoCount: number;
+  qrPhotoCount: number;
+}) {
+  const reasons: string[] = [];
+
+  if (!hasQrPhoto) {
+    reasons.push("QRなし");
+  }
+
+  if (!patientCandidate) {
+    reasons.push("患者ID候補なし");
+  }
+
+  if (photoCount === 1) {
+    reasons.push("写真枚数が少ない");
+  }
+
+  if (photoCount >= 10) {
+    reasons.push("写真枚数が多い");
+  }
+
+  if (qrPhotoCount >= 2) {
+    reasons.push("QR画像が複数");
+  }
+
+  return reasons;
 }
 
 async function deleteEmptyPendingGroups() {
