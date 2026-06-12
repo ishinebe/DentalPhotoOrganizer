@@ -26,14 +26,16 @@ import {
 import { importPhotoMetadata, type ImportPhotosResult, type LocalImageFile } from "./lib/importPhotos";
 import {
   completeReviewGroup,
-  fetchPendingReviewGroups,
+  fetchReviewGroupsByStatus,
   fetchReviewGroupPhotos,
   mergeGroups,
   movePhotoToGroup,
   regroupPendingPhotosByQrBoundaries,
+  returnReviewGroupToPending,
   splitPhotoToNewGroup,
   type ReviewGroup,
   type ReviewGroupForm,
+  type ReviewGroupListStatus,
   type ReviewGroupPhoto,
   updateReviewGroupMetadata
 } from "./lib/reviewGroups";
@@ -52,6 +54,9 @@ type ReviewActionStatus =
   | "承認中"
   | "承認成功"
   | "承認失敗"
+  | "差し戻し中"
+  | "差し戻し成功"
+  | "差し戻し失敗"
   | "移動中"
   | "移動成功"
   | "移動失敗"
@@ -153,8 +158,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 6-A</span>
-          <strong>エクスポート</strong>
+          <span>Phase 6-B</span>
+          <strong>確認済みセット再編集</strong>
         </div>
       </aside>
 
@@ -641,6 +646,7 @@ function getPhotoSlotLabel(index: number) {
 }
 
 function Review() {
+  const [reviewListStatus, setReviewListStatus] = useState<ReviewGroupListStatus>("pending");
   const [groups, setGroups] = useState<ReviewGroup[]>([]);
   const [groupPhotos, setGroupPhotos] = useState<ReviewGroupPhoto[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -672,13 +678,15 @@ function Review() {
     () => filterStaffByRole(staffMembers, ["photographer", "hygienist", "assistant", "撮影", "衛生士", "助手"]),
     [staffMembers]
   );
+  const isApprovedMode = reviewListStatus === "approved";
+  const canReturnToPending = Boolean(selectedGroup && selectedGroup.review_status === "approved" && selectedGroup.export_status !== "exported");
 
   const loadGroups = useCallback(async (preferredGroupId?: string | null) => {
     setLoadStatus("読み込み中");
     setActionStatus("待機中");
-    setMessage("確認待ちの患者写真を読み込んでいます");
+    setMessage(reviewListStatus === "pending" ? "確認待ちの撮影セットを読み込んでいます" : "確認済みの撮影セットを読み込んでいます");
 
-    const result = await fetchPendingReviewGroups();
+    const result = await fetchReviewGroupsByStatus(reviewListStatus);
 
     if (result.status === "not-configured") {
       setGroups([]);
@@ -707,8 +715,16 @@ function Review() {
       null;
     setSelectedGroupId(nextSelectedGroupId);
     setLoadStatus(result.groups.length > 0 ? "表示中" : "データなし");
-    setMessage(result.groups.length > 0 ? "確認待ちの患者写真を表示しています" : "未確認の患者写真はありません");
-  }, []);
+    setMessage(
+      result.groups.length > 0
+        ? reviewListStatus === "pending"
+          ? "確認待ちの撮影セットを表示しています"
+          : "確認済みの撮影セットを表示しています"
+        : reviewListStatus === "pending"
+          ? "確認待ちの撮影セットはありません"
+          : "確認済みの撮影セットはありません"
+    );
+  }, [reviewListStatus]);
 
   useEffect(() => {
     void loadGroups();
@@ -985,9 +1001,9 @@ function Review() {
     }
 
     setActionStatus("承認中");
-    setMessage("撮影セットをレビュー完了にしています");
+    setMessage("入力内容を保存したうえで、撮影セットを確認済みにしています");
 
-    const result = await completeReviewGroup(selectedGroup.id);
+    const result = await completeReviewGroup(selectedGroup.id, form);
 
     if (result.status !== "success") {
       setActionStatus("承認失敗");
@@ -1003,6 +1019,46 @@ function Review() {
     setLoadStatus(remainingGroups.length > 0 ? "表示中" : "データなし");
     setActionStatus("承認成功");
     setMessage(result.message);
+  };
+
+  const handleReturnToPending = async () => {
+    if (!selectedGroup) {
+      return;
+    }
+
+    if (selectedGroup.export_status === "exported") {
+      setActionStatus("差し戻し失敗");
+      setMessage("この撮影セットは出力済みのため、確認待ちには戻せません");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "この撮影セットを確認待ちに戻しますか？\nエクスポート前の撮影セットのみ対象です。"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setActionStatus("差し戻し中");
+    setMessage("撮影セットを確認待ちに戻しています");
+
+    const result = await returnReviewGroupToPending(selectedGroup.id);
+
+    if (result.status !== "success") {
+      setActionStatus("差し戻し失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    const remainingGroups = groups.filter((group) => group.id !== selectedGroup.id);
+    setGroups(remainingGroups);
+    setSelectedGroupId(remainingGroups[0]?.id ?? null);
+    setGroupPhotos([]);
+    setSelectedPhotoId(null);
+    setLoadStatus(remainingGroups.length > 0 ? "表示中" : "データなし");
+    setActionStatus("差し戻し成功");
+    setMessage("確認待ちに戻しました。確認待ちタブで再編集できます");
   };
 
   const handleMovePhoto = async () => {
@@ -1113,6 +1169,7 @@ function Review() {
   const isBusy =
     actionStatus === "保存中" ||
     actionStatus === "承認中" ||
+    actionStatus === "差し戻し中" ||
     actionStatus === "移動中" ||
     actionStatus === "分離中" ||
     actionStatus === "統合中" ||
@@ -1123,6 +1180,24 @@ function Review() {
     <div className="review-page">
       <div className="review-guidance">
         QRコード画像を境界として自動作成された撮影セットです。患者ID候補と写真のまとまりを確認してください。
+      </div>
+      <div className="review-mode-tabs" role="tablist" aria-label="確認状態の切り替え">
+        <button
+          className={reviewListStatus === "pending" ? "active" : ""}
+          type="button"
+          onClick={() => setReviewListStatus("pending")}
+          disabled={isBusy}
+        >
+          確認待ち
+        </button>
+        <button
+          className={reviewListStatus === "approved" ? "active" : ""}
+          type="button"
+          onClick={() => setReviewListStatus("approved")}
+          disabled={isBusy}
+        >
+          確認済み
+        </button>
       </div>
       <div className="review-layout">
       <aside className="patient-column">
@@ -1138,9 +1213,11 @@ function Review() {
           <RefreshCw size={16} />
           再読み込み
         </button>
-        <button className="review-refresh-button" type="button" onClick={handleRegroupByQrBoundaries} disabled={isBusy}>
-          QR境界で撮影セット再作成
-        </button>
+        {reviewListStatus === "pending" && (
+          <button className="review-refresh-button" type="button" onClick={handleRegroupByQrBoundaries} disabled={isBusy}>
+            QR境界で撮影セット再作成
+          </button>
+        )}
         <div className="patient-list review-photo-list">
           {groups.map((group, index) => (
             <button
@@ -1162,6 +1239,13 @@ function Review() {
                 <span>
                   {group.photo_count}枚 / {group.has_qr_photo ? "QRあり" : "QRなし"}
                 </span>
+                {reviewListStatus === "approved" && (
+                  <>
+                    <span>撮影日: {formatDate(group.shooting_date)}</span>
+                    <span>出力状態: {group.export_status}</span>
+                    <small>確認日時: {formatDateTime(group.approved_at)}</small>
+                  </>
+                )}
                 <div className="set-badges">
                   <em>{getReviewStatusLabel(group.review_status)}</em>
                   {group.needs_review_label && <b>要確認</b>}
@@ -1174,7 +1258,13 @@ function Review() {
           {groups.length === 0 && (
             <div className="empty-result compact">
               <ClipboardCheck size={24} />
-              <span>{loadStatus === "読み込み中" ? "読み込み中" : "レビュー待ち撮影セットはありません"}</span>
+              <span>
+                {loadStatus === "読み込み中"
+                  ? "読み込み中"
+                  : reviewListStatus === "pending"
+                    ? "確認待ち撮影セットはありません"
+                    : "確認済み撮影セットはありません"}
+              </span>
             </div>
           )}
         </div>
@@ -1250,6 +1340,7 @@ function Review() {
                 </div>
               )}
             </div>
+            {reviewListStatus === "pending" && (
             <div className="group-edit-panel">
               <div className="group-edit-header">
                 <strong>選択中の写真を修正</strong>
@@ -1282,6 +1373,7 @@ function Review() {
                 </button>
               </div>
             </div>
+            )}
             <dl className="detail-list">
               <div>
                 <dt>original_filename</dt>
@@ -1344,7 +1436,7 @@ function Review() {
             <input
               value={form.patient_id}
               onChange={(event) => updateFormValue("patient_id", event.target.value)}
-              disabled={!selectedGroup || isBusy}
+              disabled={!selectedGroup || isBusy || isApprovedMode}
               placeholder="例: 0001"
             />
           </label>
@@ -1354,7 +1446,7 @@ function Review() {
               type="date"
               value={form.shooting_date}
               onChange={(event) => updateFormValue("shooting_date", event.target.value)}
-              disabled={!selectedGroup || isBusy}
+              disabled={!selectedGroup || isBusy || isApprovedMode}
             />
           </label>
           <label>
@@ -1362,7 +1454,7 @@ function Review() {
             <select
               value={form.doctor_id}
               onChange={(event) => updateFormValue("doctor_id", event.target.value)}
-              disabled={!selectedGroup || isBusy}
+              disabled={!selectedGroup || isBusy || isApprovedMode}
             >
               <option value="">選択してください</option>
               {doctorOptions.map((staff) => (
@@ -1377,7 +1469,7 @@ function Review() {
             <select
               value={form.photographer_id}
               onChange={(event) => updateFormValue("photographer_id", event.target.value)}
-              disabled={!selectedGroup || isBusy}
+              disabled={!selectedGroup || isBusy || isApprovedMode}
             >
               <option value="">選択してください</option>
               {photographerOptions.map((staff) => (
@@ -1392,15 +1484,16 @@ function Review() {
             <textarea
               value={form.notes}
               onChange={(event) => updateFormValue("notes", event.target.value)}
-              disabled={!selectedGroup || isBusy}
+              disabled={!selectedGroup || isBusy || isApprovedMode}
               placeholder="確認内容や申し送りを入力"
             />
           </label>
           <p className="staff-load-message">{staffMessage}</p>
           <div className="review-button-notes">
-            <p>レビュー内容を保存: 入力内容だけを一時保存します。写真の確認完了にはなりません。</p>
-            <p>問題なしで確定: この撮影セットを確認済みにします。</p>
+            <p>レビュー内容を保存: 入力内容だけを保存します。確認完了にはなりません。</p>
+            <p>問題なしで確定: 入力内容を保存したうえで、この撮影セットを確認済みにします。</p>
           </div>
+          {reviewListStatus === "pending" && (
           <div className="group-merge-panel">
             <label>
               統合先撮影セット
@@ -1425,13 +1518,33 @@ function Review() {
               他の撮影セットと統合
             </button>
           </div>
-          <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
-            内容を保存
-          </button>
-          <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
-            <CheckCircle2 size={18} />
-            問題なしで確定
-          </button>
+          )}
+          {reviewListStatus === "pending" ? (
+            <>
+              <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
+                レビュー内容を保存
+              </button>
+              <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
+                <CheckCircle2 size={18} />
+                問題なしで確定
+              </button>
+            </>
+          ) : (
+            <div className="return-review-panel">
+              <p>この撮影セットを確認待ちに戻します。患者IDや担当医などを再編集できます。</p>
+              {selectedGroup?.export_status === "exported" && (
+                <strong>この撮影セットは出力済みのため、確認待ちには戻せません。</strong>
+              )}
+              <button
+                className="secondary-action-button"
+                type="button"
+                onClick={handleReturnToPending}
+                disabled={!canReturnToPending || isBusy}
+              >
+                確認待ちに戻す
+              </button>
+            </div>
+          )}
           <p className="review-action-message">{message}</p>
         </form>
       </aside>
@@ -1771,7 +1884,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.7.0 Phase 6-A</dd>
+            <dd>0.7.1 Phase 6-B</dd>
           </div>
           <div>
             <dt>構成</dt>

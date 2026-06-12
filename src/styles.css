@@ -646,6 +646,29 @@ h3 {
   line-height: 1.55;
 }
 
+.review-mode-tabs {
+  display: inline-flex;
+  width: fit-content;
+  overflow: hidden;
+  border: 1px solid #cbd8e5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.review-mode-tabs button {
+  min-width: 112px;
+  min-height: 38px;
+  border: 0;
+  color: #344054;
+  background: transparent;
+  font-weight: 700;
+}
+
+.review-mode-tabs button.active {
+  color: #ffffff;
+  background: #1265b4;
+}
+
 .review-layout {
   display: grid;
   grid-template-columns: 270px minmax(420px, 1fr) 330px;
@@ -1112,7 +1135,8 @@ textarea:focus {
 }
 
 .group-edit-panel,
-.group-merge-panel {
+.group-merge-panel,
+.return-review-panel {
   display: grid;
   gap: 10px;
   padding: 12px;
@@ -1395,6 +1419,17 @@ textarea:focus {
   border: 1px solid #d8e3ee;
   border-radius: 8px;
   background: #f8fbfe;
+}
+
+.return-review-panel p,
+.return-review-panel strong {
+  margin: 0;
+  color: #667085;
+  font-size: 0.82rem;
+}
+
+.return-review-panel strong {
+  color: #9a3412;
 }
 
 .export-metrics span,

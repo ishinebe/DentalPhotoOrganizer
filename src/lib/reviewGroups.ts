@@ -77,6 +77,8 @@ export type ReviewGroupEditResult = {
   message: string;
 };
 
+export type ReviewGroupListStatus = "pending" | "approved";
+
 const groupColumns = [
   "id",
   "import_batch_id",
@@ -158,6 +160,10 @@ const filenameCollator = new Intl.Collator("ja-JP", {
 });
 
 export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
+  return fetchReviewGroupsByStatus("pending");
+}
+
+export async function fetchReviewGroupsByStatus(reviewStatus: ReviewGroupListStatus): Promise<ReviewGroupsResult> {
   if (!hasSupabaseConfig || !supabase) {
     return {
       status: "not-configured",
@@ -166,20 +172,22 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
     };
   }
 
-  const ensureResult = await ensurePendingPhotosHaveGroups();
-  if (ensureResult.status === "error") {
-    return {
-      status: "error",
-      groups: [],
-      message: ensureResult.message
-    };
+  if (reviewStatus === "pending") {
+    const ensureResult = await ensurePendingPhotosHaveGroups();
+    if (ensureResult.status === "error") {
+      return {
+        status: "error",
+        groups: [],
+        message: ensureResult.message
+      };
+    }
   }
 
   const { data, error } = await supabase
     .from("photo_groups")
     .select(groupColumns)
-    .eq("review_status", "pending")
-    .order("created_at", { ascending: false })
+    .eq("review_status", reviewStatus)
+    .order(reviewStatus === "approved" ? "approved_at" : "created_at", { ascending: false, nullsFirst: false })
     .limit(100);
 
   if (error) {
@@ -223,7 +231,7 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
           representative_photo_filename: summary?.representativePhotoFilename ?? null
         };
       }),
-    message: "レビュー待ち撮影セットを取得しました"
+    message: reviewStatus === "pending" ? "確認待ち撮影セットを取得しました" : "確認済み撮影セットを取得しました"
   };
 }
 
@@ -387,13 +395,21 @@ export async function updateReviewGroupMetadata(
   };
 }
 
-export async function completeReviewGroup(groupId: string): Promise<ReviewGroupMutationResult> {
+export async function completeReviewGroup(groupId: string, form?: ReviewGroupForm): Promise<ReviewGroupMutationResult> {
   if (!hasSupabaseConfig || !supabase) {
     return {
       status: "not-configured",
       group: null,
       message: "Supabase未設定のためレビュー完了にできません"
     };
+  }
+
+  if (form) {
+    const saveResult = await updateReviewGroupMetadata(groupId, form);
+
+    if (saveResult.status !== "success") {
+      return saveResult;
+    }
   }
 
   const now = new Date().toISOString();
@@ -471,6 +487,115 @@ export async function completeReviewGroup(groupId: string): Promise<ReviewGroupM
       representative_photo_filename: displaySummary?.representativePhotoFilename ?? null
     },
     message: "レビュー完了にしました"
+  };
+}
+
+export async function returnReviewGroupToPending(groupId: string): Promise<ReviewGroupMutationResult> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      status: "not-configured",
+      group: null,
+      message: "Supabase未設定のため確認待ちに戻せません"
+    };
+  }
+
+  const { data: currentData, error: currentError } = await supabase
+    .from("photo_groups")
+    .select(groupColumns)
+    .eq("id", groupId)
+    .single();
+
+  if (currentError) {
+    return {
+      status: "error",
+      group: null,
+      message: currentError.message
+    };
+  }
+
+  const currentGroup = currentData as unknown as GroupRow;
+  if (currentGroup.export_status === "exported") {
+    return {
+      status: "error",
+      group: null,
+      message: "この撮影セットは出力済みのため、確認待ちには戻せません"
+    };
+  }
+
+  const reopenPayload = {
+    review_status: "pending",
+    export_status: "not_exported",
+    approved_at: null
+  };
+
+  const { data, error } = await supabase
+    .from("photo_groups")
+    .update(reopenPayload)
+    .eq("id", groupId)
+    .select(groupColumns)
+    .single();
+
+  if (error) {
+    return {
+      status: "error",
+      group: null,
+      message: error.message
+    };
+  }
+
+  const photoIds = await fetchPhotoIdsForGroup(groupId);
+  if (photoIds.status === "error") {
+    return {
+      status: "error",
+      group: null,
+      message: photoIds.message
+    };
+  }
+
+  if (photoIds.ids.length > 0) {
+    const { error: photoError } = await supabase.from("photos").update(reopenPayload).in("id", photoIds.ids);
+
+    if (photoError) {
+      return {
+        status: "error",
+        group: null,
+        message: photoError.message
+      };
+    }
+  }
+
+  const displaySummaries = await fetchGroupDisplaySummaries(
+    photoIds.ids.map((photoId, index) => ({
+      photo_id: photoId,
+      photo_group_id: groupId,
+      sort_order: index + 1
+    }))
+  );
+  const displaySummary = displaySummaries.get(groupId);
+  const reopenedGroup = (data as unknown as GroupRow) ?? {};
+  const patientCandidate = reopenedGroup.patient_id ?? displaySummary?.qrPatientCandidate ?? null;
+  const attentionReasons = buildAttentionReasons({
+    hasQrPhoto: displaySummary?.hasQrPhoto ?? false,
+    patientCandidate,
+    photoCount: photoIds.ids.length,
+    qrPhotoCount: displaySummary?.qrPhotoCount ?? 0
+  });
+
+  return {
+    status: "success",
+    group: {
+      ...reopenedGroup,
+      photo_count: photoIds.ids.length,
+      qr_patient_candidate: displaySummary?.qrPatientCandidate ?? null,
+      has_qr_photo: displaySummary?.hasQrPhoto ?? false,
+      qr_photo_count: displaySummary?.qrPhotoCount ?? 0,
+      needs_review_label: attentionReasons.length > 0,
+      attention_reasons: attentionReasons,
+      notes: displaySummary?.notes ?? null,
+      representative_photo_path: displaySummary?.representativePhotoPath ?? null,
+      representative_photo_filename: displaySummary?.representativePhotoFilename ?? null
+    },
+    message: "確認待ちに戻しました"
   };
 }
 
