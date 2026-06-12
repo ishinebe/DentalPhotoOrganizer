@@ -1234,6 +1234,12 @@ textarea:focus {
   margin: 0;
 }
 
+.staff-load-message {
+  margin: -4px 0 0;
+  color: #667085;
+  font-size: 0.78rem;
+}
+
 .review-action-message {
   margin: 8px 0 0;
   color: #475467;

@@ -31,6 +31,7 @@ import {
   type ReviewGroupPhoto,
   updateReviewGroupMetadata
 } from "./lib/reviewGroups";
+import { fetchStaffMembers, type StaffMember } from "./lib/staff";
 import { getSupabaseConnectionStatus } from "./lib/supabase";
 
 type View = "dashboard" | "import" | "review" | "search" | "settings";
@@ -101,7 +102,8 @@ const emptyReviewForm: ReviewGroupForm = {
   patient_id: "",
   shooting_date: "",
   doctor_id: "",
-  photographer_id: ""
+  photographer_id: "",
+  notes: ""
 };
 
 function App() {
@@ -142,8 +144,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 4-B</span>
-          <strong>撮影セット確認</strong>
+          <span>Phase 5-A</span>
+          <strong>レビュー情報入力</strong>
         </div>
       </aside>
 
@@ -577,6 +579,38 @@ function isQrPhoto(photo: ReviewGroupPhoto | null) {
   return Boolean(photo?.original_filename.toLowerCase().includes("qr"));
 }
 
+function roleMatches(staff: StaffMember, keywords: string[]) {
+  const role = staff.role?.toLowerCase();
+  return Boolean(role && keywords.some((keyword) => role.includes(keyword)));
+}
+
+function filterStaffByRole(staff: StaffMember[], keywords: string[]) {
+  const matchedStaff = staff.filter((member) => roleMatches(member, keywords));
+  return matchedStaff.length > 0 ? matchedStaff : staff;
+}
+
+function getMissingReviewFields(form: ReviewGroupForm) {
+  const missingFields: string[] = [];
+
+  if (!form.patient_id.trim()) {
+    missingFields.push("患者ID");
+  }
+
+  if (!form.shooting_date.trim()) {
+    missingFields.push("撮影日");
+  }
+
+  if (!form.doctor_id.trim()) {
+    missingFields.push("担当医");
+  }
+
+  if (!form.photographer_id.trim()) {
+    missingFields.push("撮影者");
+  }
+
+  return missingFields;
+}
+
 function getPhotoSlotLabel(index: number) {
   const labels = ["正面", "左側", "右側", "上顎", "下顎"];
   return labels[index] ?? `写真${index + 1}`;
@@ -596,6 +630,8 @@ function Review() {
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [setThumbnailUrls, setSetThumbnailUrls] = useState<Record<string, string>>({});
   const [photoThumbnailUrls, setPhotoThumbnailUrls] = useState<Record<string, string>>({});
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [staffMessage, setStaffMessage] = useState("スタッフ一覧を読み込んでいます");
   const [moveTargetGroupId, setMoveTargetGroupId] = useState("");
   const [mergeTargetGroupId, setMergeTargetGroupId] = useState("");
 
@@ -606,6 +642,11 @@ function Review() {
   const otherGroups = useMemo(
     () => (selectedGroup ? groups.filter((group) => group.id !== selectedGroup.id) : []),
     [groups, selectedGroup]
+  );
+  const doctorOptions = useMemo(() => filterStaffByRole(staffMembers, ["doctor", "dentist", "医師", "担当医"]), [staffMembers]);
+  const photographerOptions = useMemo(
+    () => filterStaffByRole(staffMembers, ["photographer", "hygienist", "assistant", "撮影", "衛生士", "助手"]),
+    [staffMembers]
   );
 
   const loadGroups = useCallback(async (preferredGroupId?: string | null) => {
@@ -648,6 +689,23 @@ function Review() {
   useEffect(() => {
     void loadGroups();
   }, [loadGroups]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    void fetchStaffMembers().then((result) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      setStaffMembers(result.staff);
+      setStaffMessage(result.message);
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isCurrent = true;
@@ -771,10 +829,11 @@ function Review() {
     }
 
     setForm({
-      patient_id: selectedGroup.patient_id ?? "",
+      patient_id: selectedGroup.patient_id ?? selectedGroup.qr_patient_candidate ?? "",
       shooting_date: selectedGroup.shooting_date ?? "",
       doctor_id: selectedGroup.doctor_id ?? "",
-      photographer_id: selectedGroup.photographer_id ?? ""
+      photographer_id: selectedGroup.photographer_id ?? "",
+      notes: selectedGroup.notes ?? ""
     });
   }, [selectedGroup]);
 
@@ -882,10 +941,19 @@ function Review() {
       return;
     }
 
+    const warnings: string[] = [];
+    const missingFields = getMissingReviewFields(form);
+
+    if (missingFields.length > 0) {
+      warnings.push(`未入力: ${missingFields.join("、")}`);
+    }
+
     if (selectedGroup.needs_review_label) {
-      const confirmed = window.confirm(
-        `この撮影セットは要確認です。\n理由: ${getAttentionReasonText(selectedGroup)}\nそれでも「問題なしで確定」しますか？`
-      );
+      warnings.push(`要確認: ${getAttentionReasonText(selectedGroup)}`);
+    }
+
+    if (warnings.length > 0) {
+      const confirmed = window.confirm(`確認が必要な項目があります。\n${warnings.join("\n")}\nこのまま確定しますか？`);
 
       if (!confirmed) {
         return;
@@ -1248,16 +1316,16 @@ function Review() {
         </div>
         <form className="metadata-form">
           <label>
-            patient_id
+            患者ID
             <input
               value={form.patient_id}
               onChange={(event) => updateFormValue("patient_id", event.target.value)}
               disabled={!selectedGroup || isBusy}
-              placeholder="例: P-240015"
+              placeholder="例: 0001"
             />
           </label>
           <label>
-            shooting_date
+            撮影日
             <input
               type="date"
               value={form.shooting_date}
@@ -1266,23 +1334,45 @@ function Review() {
             />
           </label>
           <label>
-            doctor_id
-            <input
+            担当医
+            <select
               value={form.doctor_id}
               onChange={(event) => updateFormValue("doctor_id", event.target.value)}
               disabled={!selectedGroup || isBusy}
-              placeholder="UUID"
-            />
+            >
+              <option value="">選択してください</option>
+              {doctorOptions.map((staff) => (
+                <option key={staff.id} value={staff.id}>
+                  {staff.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
-            photographer_id
-            <input
+            撮影者
+            <select
               value={form.photographer_id}
               onChange={(event) => updateFormValue("photographer_id", event.target.value)}
               disabled={!selectedGroup || isBusy}
-              placeholder="UUID"
+            >
+              <option value="">選択してください</option>
+              {photographerOptions.map((staff) => (
+                <option key={staff.id} value={staff.id}>
+                  {staff.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            メモ
+            <textarea
+              value={form.notes}
+              onChange={(event) => updateFormValue("notes", event.target.value)}
+              disabled={!selectedGroup || isBusy}
+              placeholder="確認内容や申し送りを入力"
             />
           </label>
+          <p className="staff-load-message">{staffMessage}</p>
           <div className="review-button-notes">
             <p>レビュー内容を保存: 入力内容だけを一時保存します。写真の確認完了にはなりません。</p>
             <p>問題なしで確定: この撮影セットを確認済みにします。</p>
@@ -1397,7 +1487,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.5.0 Phase 4-B</dd>
+            <dd>0.6.0 Phase 5-A</dd>
           </div>
           <div>
             <dt>構成</dt>

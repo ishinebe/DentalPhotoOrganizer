@@ -16,6 +16,7 @@ export type ReviewGroup = {
   approved_at: string | null;
   created_at: string | null;
   patient_uuid: string | null;
+  notes: string | null;
   photo_count: number;
   qr_patient_candidate: string | null;
   has_qr_photo: boolean;
@@ -40,6 +41,7 @@ export type ReviewGroupPhoto = {
   export_status: "not_exported" | "ready_for_export" | "exported" | "export_failed";
   reviewed_at: string | null;
   approved_at: string | null;
+  notes: string | null;
   sort_order: number | null;
 };
 
@@ -48,6 +50,7 @@ export type ReviewGroupForm = {
   shooting_date: string;
   doctor_id: string;
   photographer_id: string;
+  notes: string;
 };
 
 export type ReviewGroupsResult = {
@@ -105,7 +108,8 @@ const photoColumns = [
   "review_status",
   "export_status",
   "reviewed_at",
-  "approved_at"
+  "approved_at",
+  "notes"
 ].join(",");
 
 type GroupRow = Omit<
@@ -116,6 +120,7 @@ type GroupRow = Omit<
   | "qr_photo_count"
   | "needs_review_label"
   | "attention_reasons"
+  | "notes"
   | "representative_photo_path"
   | "representative_photo_filename"
 >;
@@ -135,6 +140,7 @@ type GroupDisplaySummary = {
   qrPatientCandidate: string | null;
   hasQrPhoto: boolean;
   qrPhotoCount: number;
+  notes: string | null;
   representativePhotoPath: string | null;
   representativePhotoFilename: string | null;
 };
@@ -212,6 +218,7 @@ export async function fetchPendingReviewGroups(): Promise<ReviewGroupsResult> {
           qr_photo_count: summary?.qrPhotoCount ?? 0,
           needs_review_label: attentionReasons.length > 0,
           attention_reasons: attentionReasons,
+          notes: summary?.notes ?? null,
           representative_photo_path: summary?.representativePhotoPath ?? null,
           representative_photo_filename: summary?.representativePhotoFilename ?? null
         };
@@ -319,6 +326,32 @@ export async function updateReviewGroupMetadata(
   }
 
   const photoIds = await fetchPhotoIdsForGroup(groupId);
+  if (photoIds.status === "error") {
+    return {
+      status: "error",
+      group: null,
+      message: photoIds.message
+    };
+  }
+
+  if (photoIds.ids.length > 0) {
+    const { error: photoNoteError } = await supabase
+      .from("photos")
+      .update({
+        notes: normalizeNullableText(form.notes),
+        reviewed_at: now
+      })
+      .in("id", photoIds.ids);
+
+    if (photoNoteError) {
+      return {
+        status: "error",
+        group: null,
+        message: photoNoteError.message
+      };
+    }
+  }
+
   const displaySummaries = await fetchGroupDisplaySummaries(
     photoIds.ids.map((photoId, index) => ({
       photo_id: photoId,
@@ -346,6 +379,7 @@ export async function updateReviewGroupMetadata(
       qr_photo_count: displaySummary?.qrPhotoCount ?? 0,
       needs_review_label: attentionReasons.length > 0,
       attention_reasons: attentionReasons,
+      notes: normalizeNullableText(form.notes),
       representative_photo_path: displaySummary?.representativePhotoPath ?? null,
       representative_photo_filename: displaySummary?.representativePhotoFilename ?? null
     },
@@ -432,6 +466,7 @@ export async function completeReviewGroup(groupId: string): Promise<ReviewGroupM
       qr_photo_count: displaySummary?.qrPhotoCount ?? 0,
       needs_review_label: attentionReasons.length > 0,
       attention_reasons: attentionReasons,
+      notes: displaySummary?.notes ?? null,
       representative_photo_path: displaySummary?.representativePhotoPath ?? null,
       representative_photo_filename: displaySummary?.representativePhotoFilename ?? null
     },
@@ -982,7 +1017,7 @@ async function fetchGroupDisplaySummaries(items: GroupItemRow[]) {
   const photoIds = [...new Set(items.map((item) => item.photo_id))];
   const { data, error } = await supabase
     .from("photos")
-    .select("id,original_filename,original_path,imported_at")
+    .select("id,original_filename,original_path,imported_at,notes")
     .in("id", photoIds);
 
   if (error) {
@@ -1006,10 +1041,12 @@ async function fetchGroupDisplaySummaries(items: GroupItemRow[]) {
     const qrPhoto = qrPhotos[0] ?? null;
     const representativePhoto =
       groupPhotos.find((photo) => !isQrBoundaryFilename(photo.original_filename)) ?? groupPhotos[0] ?? null;
+    const noteSourcePhoto = groupPhotos.find((photo) => photo.notes);
     summaries.set(groupId, {
       qrPatientCandidate: qrPhoto ? extractQrPatientCandidate(qrPhoto.original_filename) : null,
       hasQrPhoto: Boolean(qrPhoto),
       qrPhotoCount: qrPhotos.length,
+      notes: noteSourcePhoto?.notes ?? null,
       representativePhotoPath: representativePhoto?.original_path ?? null,
       representativePhotoFilename: representativePhoto?.original_filename ?? null
     });

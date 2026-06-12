@@ -294,13 +294,13 @@ Group review behavior:
   - `shooting_date`
   - `doctor_id`
   - `photographer_id`
-- `doctor_id` and `photographer_id` are UUID string inputs until staff table selection is implemented
+- Since Phase5-A, `doctor_id` and `photographer_id` are selected from the `staff` table when available. The UI shows staff names and saves staff IDs.
 - The group Review workflow does not use:
   - `doctor_name`
   - `photographer_name`
-  - `notes`
   - `group_label`
   - `updated_at`
+- `photo_groups.notes` is not used because it is not confirmed in the real DB. Phase5-A memo text is saved to child `photos.notes`.
 - `レビュー内容を保存` updates the selected group only
 - `レビュー完了` updates the selected group and its photos to:
   - `review_status = approved`
@@ -656,6 +656,43 @@ The application must not:
 * Overwrite originals
 
 All grouping and metadata management should be database-driven.
+
+---
+
+## Current Phase
+
+Current phase: Phase 5-A - レビュー情報入力
+
+Phase5-A improves the Review right column for clinic staff:
+
+* 患者ID
+* 撮影日
+* 担当医
+* 撮影者
+* メモ
+
+担当医 and 撮影者 are loaded from the real Supabase `staff` table when available. The UI displays staff names, while `photo_groups.doctor_id` and `photo_groups.photographer_id` store the selected staff IDs.
+
+The current real `photo_groups` schema does not confirm a `notes` column. For Phase5-A, memo text is saved to `photos.notes` for the photos inside the selected shooting set. Do not add or use `photo_groups.notes` unless the real DB schema is changed and `docs/database_reference.md` is updated.
+
+Before confirming a shooting set, the app warns if any of these are missing:
+
+* 患者ID
+* 撮影日
+* 担当医
+* 撮影者
+
+This warning does not fully block confirmation in Phase5-A. Future phases may make these fields mandatory.
+
+Real environment verification:
+
+1. Configure `.env` with Supabase values.
+2. Confirm `staff` has `id`, `name`, and optionally `role`.
+3. Open Review.
+4. Confirm the right column shows patient ID, shooting date, doctor, photographer, and memo.
+5. Confirm doctor/photographer dropdowns show staff names.
+6. Save review content and verify `photo_groups.patient_id`, `photo_groups.shooting_date`, `photo_groups.doctor_id`, `photo_groups.photographer_id`, and child `photos.notes` are updated.
+7. Try confirming with missing fields and confirm the warning dialog appears.
 
 ---
 
