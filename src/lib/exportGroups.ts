@@ -1,0 +1,245 @@
+import { fetchStaffMembers } from "./staff";
+import { hasSupabaseConfig, supabase } from "./supabase";
+
+export type ExportStatus = "not_exported" | "ready_for_export" | "exported" | "export_failed";
+
+export type ExportGroupPhoto = {
+  id: string;
+  original_filename: string;
+  original_path: string | null;
+  export_status: ExportStatus;
+  sort_order: number | null;
+};
+
+export type ExportGroup = {
+  id: string;
+  patient_id: string | null;
+  shooting_date: string | null;
+  doctor_id: string | null;
+  doctor_name: string | null;
+  photographer_id: string | null;
+  photographer_name: string | null;
+  review_status: "approved";
+  export_status: "ready_for_export";
+  created_at: string | null;
+  photos: ExportGroupPhoto[];
+};
+
+export type ExportGroupsResult = {
+  status: "success" | "error" | "not-configured";
+  groups: ExportGroup[];
+  message: string;
+};
+
+export type MarkExportedResult = {
+  status: "success" | "error" | "not-configured";
+  message: string;
+};
+
+type ExportGroupRow = {
+  id: string;
+  patient_id: string | null;
+  shooting_date: string | null;
+  doctor_id: string | null;
+  photographer_id: string | null;
+  review_status: "approved";
+  export_status: "ready_for_export";
+  created_at: string | null;
+};
+
+type ExportGroupItemRow = {
+  photo_group_id: string;
+  photo_id: string;
+  sort_order: number | null;
+};
+
+type ExportPhotoRow = {
+  id: string;
+  original_filename: string;
+  original_path: string | null;
+  export_status: ExportStatus;
+};
+
+const exportGroupColumns = [
+  "id",
+  "patient_id",
+  "shooting_date",
+  "doctor_id",
+  "photographer_id",
+  "review_status",
+  "export_status",
+  "created_at"
+].join(",");
+
+const exportPhotoColumns = ["id", "original_filename", "original_path", "export_status"].join(",");
+
+export async function fetchReadyExportGroups(): Promise<ExportGroupsResult> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      status: "not-configured",
+      groups: [],
+      message: "Supabase未設定のためエクスポート対象を取得できません"
+    };
+  }
+
+  const { data: groupData, error: groupError } = await supabase
+    .from("photo_groups")
+    .select(exportGroupColumns)
+    .eq("review_status", "approved")
+    .eq("export_status", "ready_for_export")
+    .order("created_at", { ascending: true })
+    .limit(100);
+
+  if (groupError) {
+    return {
+      status: "error",
+      groups: [],
+      message: groupError.message
+    };
+  }
+
+  const groupRows = (groupData ?? []) as unknown as ExportGroupRow[];
+  if (groupRows.length === 0) {
+    return {
+      status: "success",
+      groups: [],
+      message: "エクスポート対象の撮影セットはありません"
+    };
+  }
+
+  const groupIds = groupRows.map((group) => group.id);
+  const { data: itemData, error: itemError } = await supabase
+    .from("photo_group_items")
+    .select("photo_group_id,photo_id,sort_order")
+    .in("photo_group_id", groupIds)
+    .order("sort_order", { ascending: true });
+
+  if (itemError) {
+    return {
+      status: "error",
+      groups: [],
+      message: itemError.message
+    };
+  }
+
+  const items = (itemData ?? []) as unknown as ExportGroupItemRow[];
+  const photoIds = [...new Set(items.map((item) => item.photo_id))];
+  const photoById = new Map<string, ExportPhotoRow>();
+
+  if (photoIds.length > 0) {
+    const { data: photoData, error: photoError } = await supabase.from("photos").select(exportPhotoColumns).in("id", photoIds);
+
+    if (photoError) {
+      return {
+        status: "error",
+        groups: [],
+        message: photoError.message
+      };
+    }
+
+    for (const photo of (photoData ?? []) as unknown as ExportPhotoRow[]) {
+      photoById.set(photo.id, photo);
+    }
+  }
+
+  const staffNames = await fetchStaffNameMap();
+  const itemsByGroup = new Map<string, ExportGroupItemRow[]>();
+
+  for (const item of items) {
+    const groupItems = itemsByGroup.get(item.photo_group_id) ?? [];
+    groupItems.push(item);
+    itemsByGroup.set(item.photo_group_id, groupItems);
+  }
+
+  const groups = groupRows.map((group) => {
+    const photos = (itemsByGroup.get(group.id) ?? [])
+      .map((item) => {
+        const photo = photoById.get(item.photo_id);
+        return photo ? { ...photo, sort_order: item.sort_order } : null;
+      })
+      .filter((photo): photo is ExportGroupPhoto => Boolean(photo))
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+    return {
+      ...group,
+      doctor_name: group.doctor_id ? staffNames.get(group.doctor_id) ?? group.doctor_id : null,
+      photographer_name: group.photographer_id ? staffNames.get(group.photographer_id) ?? group.photographer_id : null,
+      photos
+    };
+  });
+
+  return {
+    status: "success",
+    groups,
+    message: "エクスポート対象を取得しました"
+  };
+}
+
+export async function markGroupsExported(groupIds: string[]): Promise<MarkExportedResult> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      status: "not-configured",
+      message: "Supabase未設定のためエクスポート状態を更新できません"
+    };
+  }
+
+  if (groupIds.length === 0) {
+    return {
+      status: "success",
+      message: "更新対象はありません"
+    };
+  }
+
+  const { error: groupError } = await supabase
+    .from("photo_groups")
+    .update({
+      export_status: "exported"
+    })
+    .in("id", groupIds);
+
+  if (groupError) {
+    return {
+      status: "error",
+      message: groupError.message
+    };
+  }
+
+  const { data: itemData, error: itemError } = await supabase
+    .from("photo_group_items")
+    .select("photo_id")
+    .in("photo_group_id", groupIds);
+
+  if (itemError) {
+    return {
+      status: "error",
+      message: itemError.message
+    };
+  }
+
+  const photoIds = [...new Set(((itemData ?? []) as unknown as Array<{ photo_id: string }>).map((item) => item.photo_id))];
+  if (photoIds.length > 0) {
+    const { error: photoError } = await supabase
+      .from("photos")
+      .update({
+        export_status: "exported"
+      })
+      .in("id", photoIds);
+
+    if (photoError) {
+      return {
+        status: "error",
+        message: photoError.message
+      };
+    }
+  }
+
+  return {
+    status: "success",
+    message: "エクスポート済みに更新しました"
+  };
+}
+
+async function fetchStaffNameMap() {
+  const staffResult = await fetchStaffMembers();
+  return new Map(staffResult.staff.map((staff) => [staff.id, staff.name]));
+}

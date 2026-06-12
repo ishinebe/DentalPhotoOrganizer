@@ -12,11 +12,53 @@ export type ImagePreviewResult = {
   message: string;
 };
 
+export type ExportFolderSelectionResult = {
+  canceled: boolean;
+  folderPath: string | null;
+};
+
+export type ExportPhotoFilePayload = {
+  photoId: string;
+  originalPath: string | null;
+  originalFilename: string;
+  exportFilename: string;
+};
+
+export type ExportPhotoGroupPayload = {
+  groupId: string;
+  patientId: string | null;
+  shootingDate: string | null;
+  photos: ExportPhotoFilePayload[];
+};
+
+export type ExportPhotoFilesPayload = {
+  exportRootPath: string;
+  groups: ExportPhotoGroupPayload[];
+};
+
+export type ExportPhotoFileFailure = {
+  groupId: string;
+  photoId: string;
+  originalFilename: string;
+  message: string;
+};
+
+export type ExportPhotoFilesResult = {
+  status: "success" | "partial" | "error";
+  successGroupIds: string[];
+  failedGroupIds: string[];
+  successPhotoCount: number;
+  failedPhotoCount: number;
+  failures: ExportPhotoFileFailure[];
+};
+
 declare global {
   interface Window {
     electronAPI?: {
       selectImageFolder: () => Promise<ImageFolderSelectionResult>;
       loadImagePreview: (filePath: string) => Promise<ImagePreviewResult>;
+      selectExportFolder: () => Promise<ExportFolderSelectionResult>;
+      exportPhotoFiles: (payload: ExportPhotoFilesPayload) => Promise<ExportPhotoFilesResult>;
     };
   }
 }

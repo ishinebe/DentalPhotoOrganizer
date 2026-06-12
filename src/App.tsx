@@ -17,6 +17,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
+import {
+  fetchReadyExportGroups,
+  markGroupsExported,
+  type ExportGroup,
+  type ExportGroupPhoto
+} from "./lib/exportGroups";
 import { importPhotoMetadata, type ImportPhotosResult, type LocalImageFile } from "./lib/importPhotos";
 import {
   completeReviewGroup,
@@ -34,7 +40,7 @@ import {
 import { fetchStaffMembers, type StaffMember } from "./lib/staff";
 import { getSupabaseConnectionStatus } from "./lib/supabase";
 
-type View = "dashboard" | "import" | "review" | "search" | "settings";
+type View = "dashboard" | "import" | "review" | "export" | "search" | "settings";
 type ImportStatus = "未選択" | "フォルダ選択済み" | "対象ファイルなし" | "取込中" | "取込完了" | "取込失敗" | "Supabase未設定";
 type SupabaseStatus = "checking" | "success" | "failed" | "not-configured";
 type ReviewLoadStatus = "読み込み中" | "データなし" | "取得失敗" | "表示中" | "Supabase未設定";
@@ -59,6 +65,8 @@ type ReviewActionStatus =
   | "セット再作成成功"
   | "セット再作成失敗";
 type PreviewStatus = "未選択" | "読み込み中" | "表示中" | "読み込み失敗" | "未対応形式" | "Electron API未接続";
+type ExportLoadStatus = "読み込み中" | "表示中" | "データなし" | "取得失敗" | "Supabase未設定";
+type ExportActionStatus = "待機中" | "フォルダ選択中" | "エクスポート中" | "エクスポート完了" | "エクスポート失敗";
 
 const emptyStats = {
   totalPhotos: 0,
@@ -71,6 +79,7 @@ const navItems: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "dashboard", label: "ホーム", icon: Gauge },
   { id: "import", label: "写真取込", icon: FolderDown },
   { id: "review", label: "写真確認", icon: ClipboardCheck },
+  { id: "export", label: "エクスポート", icon: HardDriveDownload },
   { id: "search", label: "写真検索", icon: Search },
   { id: "settings", label: "設定", icon: Settings }
 ];
@@ -144,8 +153,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 5-A</span>
-          <strong>レビュー情報入力</strong>
+          <span>Phase 6-A</span>
+          <strong>エクスポート</strong>
         </div>
       </aside>
 
@@ -165,6 +174,7 @@ function App() {
           {activeView === "dashboard" && <Dashboard />}
           {activeView === "import" && <Import />}
           {activeView === "review" && <Review />}
+          {activeView === "export" && <ExportView />}
           {activeView === "search" && <SearchView />}
           {activeView === "settings" && <SettingsView />}
         </section>
@@ -543,6 +553,20 @@ function formatDateTime(value: string | null) {
     dateStyle: "short",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function formatDate(value: string | null) {
+  return value || "-";
+}
+
+function getExportFilename(photo: ExportGroupPhoto, index: number) {
+  const extensionMatch = photo.original_filename.match(/\.[^.]+$/);
+  const extension = extensionMatch?.[0].toLowerCase() ?? ".jpg";
+  return `${String(index + 1).padStart(3, "0")}${extension}`;
+}
+
+function countExportPhotos(groups: ExportGroup[]) {
+  return groups.reduce((total, group) => total + group.photos.length, 0);
 }
 
 function formatGroupOption(group: ReviewGroup) {
@@ -1417,6 +1441,266 @@ function Review() {
 }
 
 
+function ExportView() {
+  const [groups, setGroups] = useState<ExportGroup[]>([]);
+  const [loadStatus, setLoadStatus] = useState<ExportLoadStatus>("読み込み中");
+  const [actionStatus, setActionStatus] = useState<ExportActionStatus>("待機中");
+  const [message, setMessage] = useState("エクスポート対象を読み込んでいます");
+  const [exportRootPath, setExportRootPath] = useState<string | null>(null);
+  const [resultSummary, setResultSummary] = useState<{
+    successGroupCount: number;
+    successPhotoCount: number;
+    failedPhotoCount: number;
+    failures: Array<{ originalFilename: string; message: string }>;
+  } | null>(null);
+
+  const isElectronApiConnected =
+    typeof window.electronAPI?.selectExportFolder === "function" &&
+    typeof window.electronAPI?.exportPhotoFiles === "function";
+  const isBusy = loadStatus === "読み込み中" || actionStatus === "フォルダ選択中" || actionStatus === "エクスポート中";
+  const targetPhotoCount = countExportPhotos(groups);
+  const canExport = isElectronApiConnected && Boolean(exportRootPath) && groups.length > 0 && targetPhotoCount > 0 && !isBusy;
+
+  const loadExportTargets = useCallback(async () => {
+    setLoadStatus("読み込み中");
+    setActionStatus("待機中");
+    setMessage("エクスポート対象を読み込んでいます");
+
+    const result = await fetchReadyExportGroups();
+
+    if (result.status === "not-configured") {
+      setGroups([]);
+      setLoadStatus("Supabase未設定");
+      setMessage(result.message);
+      return;
+    }
+
+    if (result.status === "error") {
+      setGroups([]);
+      setLoadStatus("取得失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    setGroups(result.groups);
+    setLoadStatus(result.groups.length > 0 ? "表示中" : "データなし");
+    setMessage(result.message);
+  }, []);
+
+  useEffect(() => {
+    void loadExportTargets();
+  }, [loadExportTargets]);
+
+  const handleSelectExportFolder = async () => {
+    if (!window.electronAPI?.selectExportFolder) {
+      setActionStatus("エクスポート失敗");
+      setMessage("Electron API未接続のため出力先フォルダを選択できません");
+      return;
+    }
+
+    setActionStatus("フォルダ選択中");
+    setResultSummary(null);
+
+    try {
+      const selection = await window.electronAPI.selectExportFolder();
+
+      if (!selection || selection.canceled) {
+        setActionStatus("待機中");
+        return;
+      }
+
+      setExportRootPath(selection.folderPath);
+      setActionStatus("待機中");
+      setMessage("出力先フォルダを選択しました");
+    } catch {
+      setActionStatus("エクスポート失敗");
+      setMessage("出力先フォルダの選択に失敗しました");
+    }
+  };
+
+  const handleStartExport = async () => {
+    if (!window.electronAPI?.exportPhotoFiles || !exportRootPath) {
+      setActionStatus("エクスポート失敗");
+      setMessage("Electron API未接続、または出力先フォルダが未選択です");
+      return;
+    }
+
+    setActionStatus("エクスポート中");
+    setMessage("元画像を変更せず、出力先へコピーしています");
+    setResultSummary(null);
+
+    const copyPayload = {
+      exportRootPath,
+      groups: groups.map((group) => ({
+        groupId: group.id,
+        patientId: group.patient_id,
+        shootingDate: group.shooting_date,
+        photos: group.photos.map((photo, index) => ({
+          photoId: photo.id,
+          originalPath: photo.original_path,
+          originalFilename: photo.original_filename,
+          exportFilename: getExportFilename(photo, index)
+        }))
+      }))
+    };
+
+    try {
+      const copyResult = await window.electronAPI.exportPhotoFiles(copyPayload);
+
+      if (copyResult.successGroupIds.length > 0) {
+        const markResult = await markGroupsExported(copyResult.successGroupIds);
+
+        if (markResult.status !== "success") {
+          setActionStatus("エクスポート失敗");
+          setMessage(`コピー後のDB更新に失敗しました: ${markResult.message}`);
+          return;
+        }
+      }
+
+      setResultSummary({
+        successGroupCount: copyResult.successGroupIds.length,
+        successPhotoCount: copyResult.successPhotoCount,
+        failedPhotoCount: copyResult.failedPhotoCount,
+        failures: copyResult.failures.map((failure) => ({
+          originalFilename: failure.originalFilename || "撮影セット",
+          message: failure.message
+        }))
+      });
+      setActionStatus(copyResult.status === "success" ? "エクスポート完了" : "エクスポート失敗");
+      setMessage(
+        copyResult.status === "success"
+          ? "エクスポートが完了しました"
+          : "一部の写真をエクスポートできませんでした。失敗した撮影セットは ready_for_export のまま残ります"
+      );
+      await loadExportTargets();
+    } catch {
+      setActionStatus("エクスポート失敗");
+      setMessage("エクスポート処理に失敗しました");
+    }
+  };
+
+  return (
+    <div className="export-page">
+      <section className="export-summary-panel">
+        <div className="panel-heading">
+          <HardDriveDownload size={24} />
+          <div>
+            <h2>エクスポート</h2>
+            <p>レビュー完了済みで、まだ出力されていない撮影セットをコピー出力します。</p>
+          </div>
+        </div>
+
+        <div className="export-metrics">
+          <article>
+            <span>対象撮影セット数</span>
+            <strong>{groups.length.toLocaleString()}件</strong>
+          </article>
+          <article>
+            <span>対象写真数</span>
+            <strong>{targetPhotoCount.toLocaleString()}枚</strong>
+          </article>
+          <article>
+            <span>状態</span>
+            <strong>{loadStatus}</strong>
+          </article>
+        </div>
+
+        <div className={isElectronApiConnected ? "api-diagnostic connected" : "api-diagnostic disconnected"}>
+          <span className={isElectronApiConnected ? "status-dot ready" : "status-dot danger"} />
+          <div>
+            <strong>{isElectronApiConnected ? "Electron API接続済み" : "Electron API未接続"}</strong>
+            <p>
+              {isElectronApiConnected
+                ? "出力先フォルダ選択とローカルファイルコピーを preload 経由で実行できます"
+                : "ブラウザ単体ではエクスポートできません。Electronウィンドウで起動してください"}
+            </p>
+          </div>
+        </div>
+
+        <div className="export-folder-row">
+          <div>
+            <span>出力先フォルダ</span>
+            <strong>{exportRootPath ?? "未選択"}</strong>
+          </div>
+          <button type="button" onClick={handleSelectExportFolder} disabled={!isElectronApiConnected || isBusy}>
+            フォルダを選択
+          </button>
+        </div>
+
+        <div className="export-actions">
+          <button className="primary-button" type="button" onClick={handleStartExport} disabled={!canExport}>
+            エクスポート開始
+          </button>
+          <button type="button" onClick={() => void loadExportTargets()} disabled={isBusy}>
+            再読み込み
+          </button>
+        </div>
+
+        <div className={`review-status ${actionStatus === "エクスポート失敗" ? "error" : ""}`}>
+          <strong>{actionStatus}</strong>
+          <span>{message}</span>
+        </div>
+
+        {resultSummary && (
+          <section className="export-result-panel">
+            <h3>エクスポート結果</h3>
+            <dl>
+              <div>
+                <dt>成功した撮影セット</dt>
+                <dd>{resultSummary.successGroupCount}件</dd>
+              </div>
+              <div>
+                <dt>成功した写真</dt>
+                <dd>{resultSummary.successPhotoCount}枚</dd>
+              </div>
+              <div>
+                <dt>失敗した写真</dt>
+                <dd>{resultSummary.failedPhotoCount}枚</dd>
+              </div>
+            </dl>
+            {resultSummary.failures.length > 0 && (
+              <div className="export-failure-list">
+                <strong>失敗</strong>
+                {resultSummary.failures.map((failure, index) => (
+                  <p key={`${failure.originalFilename}-${index}`}>
+                    {failure.originalFilename}: {failure.message}
+                  </p>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+      </section>
+
+      <aside className="export-target-panel">
+        <div className="column-title">
+          <h2>対象撮影セット一覧</h2>
+          <span>{groups.length}件</span>
+        </div>
+        <div className="export-target-list">
+          {groups.map((group) => (
+            <article className="export-target-card" key={group.id}>
+              <strong>{group.patient_id ?? "患者ID未設定"}</strong>
+              <span>撮影日: {formatDate(group.shooting_date)}</span>
+              <span>写真枚数: {group.photos.length}枚</span>
+              <span>担当医: {group.doctor_name ?? "-"}</span>
+              <span>撮影者: {group.photographer_name ?? "-"}</span>
+              <em>{group.export_status}</em>
+            </article>
+          ))}
+          {groups.length === 0 && (
+            <div className="empty-result compact">
+              <HardDriveDownload size={24} />
+              <span>{loadStatus === "読み込み中" ? "読み込み中" : "エクスポート対象はありません"}</span>
+            </div>
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+
 function SearchView() {
   return (
     <div className="search-layout">
@@ -1487,7 +1771,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.6.0 Phase 5-A</dd>
+            <dd>0.7.0 Phase 6-A</dd>
           </div>
           <div>
             <dt>構成</dt>

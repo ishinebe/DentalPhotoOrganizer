@@ -34,14 +34,15 @@ Phase 2-E では Review 画面を Supabase の `photos` テーブルに接続し
 
 Review 画面は `photos` テーブルから `review_status = 'pending'` の写真を `imported_at` の新しい順で最大100件取得します。
 
-左カラムにはレビュー待ち写真一覧を表示します。
+左カラムにはレビュー待ちの撮影セット一覧を表示します。
 
-- `original_filename`
-- `imported_at`
-- `review_status`
-- `file_size`
+- 撮影セット番号
+- 患者ID候補
+- 写真枚数
+- QRあり / QRなし
+- 要確認ラベル
 
-中央カラムには選択中写真の詳細を表示します。
+中央カラムには選択中撮影セットの概要、選択中写真プレビュー、撮影セット内写真一覧を表示します。
 
 - `original_filename`
 - `original_path`
@@ -52,14 +53,15 @@ Review 画面は `photos` テーブルから `review_status = 'pending'` の写�
 - `review_status`
 - `export_status`
 
-ローカル画像プレビューは現時点では未実装です。元画像ファイルは移動・コピーせず、`original_path` で参照します。
+ローカル画像プレビューは Electron preload 経由で読み取り専用表示します。元画像ファイルは移動・リネーム・削除しません。
 
-右カラムでは以下の DB メタデータのみ編集できます。
+右カラムでは以下のレビュー情報を編集できます。
 
-- `provisional_patient_id`
-- `doctor_name`
-- `photographer_name`
-- `notes`
+- 患者ID
+- 撮影日
+- 担当医
+- 撮影者
+- メモ
 
 保存時は `reviewed_at` に現在時刻を入れます。
 承認時は `review_status = 'approved'`、`export_status = 'ready_for_export'`、`reviewed_at`、`approved_at` を更新します。
@@ -177,9 +179,6 @@ Supabase の環境変数が未設定の場合は、Dashboard は「Supabase未�
 ## 未実装
 
 - Supabase Storage
-- ローカル画像プレビュー
-- サムネイル生成
-- 画像コピー
 - 画像移動
 - 画像リネーム
 - 画像削除
@@ -191,7 +190,8 @@ Supabase の環境変数が未設定の場合は、Dashboard は「Supabase未�
 - photo_groups 自動作成
 - Search画面の実検索
 - audit_logs への書き込み
-- エクスポート処理
+- zip出力
+- クラウドアップロード
 - 認証
 - RLS
 
@@ -661,38 +661,49 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 5-A - レビュー情報入力
+Current phase: Phase 6-A - エクスポート
 
-Phase5-A improves the Review right column for clinic staff:
+Phase6-A adds a local export workflow for reviewed shooting sets.
 
-* 患者ID
-* 撮影日
-* 担当医
-* 撮影者
-* メモ
+対象は `photo_groups.review_status = approved` and `photo_groups.export_status = ready_for_export` の撮影セットのみです。関連写真は `photo_group_items.photo_group_id` and `photos` から取得します。
 
-担当医 and 撮影者 are loaded from the real Supabase `staff` table when available. The UI displays staff names, while `photo_groups.doctor_id` and `photo_groups.photographer_id` store the selected staff IDs.
+Export rules:
 
-The current real `photo_groups` schema does not confirm a `notes` column. For Phase5-A, memo text is saved to `photos.notes` for the photos inside the selected shooting set. Do not add or use `photo_groups.notes` unless the real DB schema is changed and `docs/database_reference.md` is updated.
+* 元画像ファイルは変更しない
+* 元画像ファイルを移動・削除・リネームしない
+* Electron main process の `fs.copyFile` によるコピーのみ行う
+* 出力先フォルダがなければ作成する
+* 既存ファイルは上書きせず、`001_1.jpg` のように重複回避する
 
-Before confirming a shooting set, the app warns if any of these are missing:
+Output folder structure:
 
-* 患者ID
-* 撮影日
-* 担当医
-* 撮影者
+```text
+selected export folder/
+└─ YYYY-MM-DD/
+   └─ patient_id/
+      ├─ 001.jpg
+      ├─ 002.jpg
+      └─ 003.jpg
+```
 
-This warning does not fully block confirmation in Phase5-A. Future phases may make these fields mandatory.
+After all photos in a shooting set are copied successfully, the app updates:
+
+* `photo_groups.export_status = exported`
+* related `photos.export_status = exported`
+
+If any photo fails, that shooting set remains `ready_for_export` so it can be retried.
 
 Real environment verification:
 
 1. Configure `.env` with Supabase values.
-2. Confirm `staff` has `id`, `name`, and optionally `role`.
-3. Open Review.
-4. Confirm the right column shows patient ID, shooting date, doctor, photographer, and memo.
-5. Confirm doctor/photographer dropdowns show staff names.
-6. Save review content and verify `photo_groups.patient_id`, `photo_groups.shooting_date`, `photo_groups.doctor_id`, `photo_groups.photographer_id`, and child `photos.notes` are updated.
-7. Try confirming with missing fields and confirm the warning dialog appears.
+2. Review and confirm at least one shooting set so it becomes `approved / ready_for_export`.
+3. Open Export.
+4. Confirm target shooting set count and photo count.
+5. Select an output folder.
+6. Start export.
+7. Confirm files are copied to `YYYY-MM-DD/patient_id/001.ext`.
+8. Confirm originals under `photos.original_path` are unchanged.
+9. Confirm successful groups become `exported`.
 
 ---
 

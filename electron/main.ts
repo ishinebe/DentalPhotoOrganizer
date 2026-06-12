@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { existsSync } from "node:fs";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import jpeg from "jpeg-js";
@@ -34,6 +34,32 @@ type LocalImageFile = {
 type ImageCodeDetection = {
   codeType: "qrcode" | null;
   codeText: string | null;
+};
+
+type ExportPhotoPayload = {
+  photoId: string;
+  originalPath: string | null;
+  originalFilename: string;
+  exportFilename: string;
+};
+
+type ExportGroupPayload = {
+  groupId: string;
+  patientId: string | null;
+  shootingDate: string | null;
+  photos: ExportPhotoPayload[];
+};
+
+type ExportPhotoFilesPayload = {
+  exportRootPath: string;
+  groups: ExportGroupPayload[];
+};
+
+type ExportFailure = {
+  groupId: string;
+  photoId: string;
+  originalFilename: string;
+  message: string;
 };
 
 type QrDecoder = (data: Uint8ClampedArray, width: number, height: number) => { data: string } | null;
@@ -150,6 +176,166 @@ function registerIpcHandlers() {
       };
     }
   });
+
+  ipcMain.handle("select-export-folder", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "エクスポート先フォルダを選択",
+      properties: ["openDirectory", "createDirectory"]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return {
+        canceled: true,
+        folderPath: null
+      };
+    }
+
+    return {
+      canceled: false,
+      folderPath: result.filePaths[0]
+    };
+  });
+
+  ipcMain.handle("export-photo-files", async (_event, payload: ExportPhotoFilesPayload) => {
+    if (!isValidExportPayload(payload)) {
+      return {
+        status: "error",
+        successGroupIds: [],
+        failedGroupIds: [],
+        successPhotoCount: 0,
+        failedPhotoCount: 0,
+        failures: [
+          {
+            groupId: "",
+            photoId: "",
+            originalFilename: "",
+            message: "エクスポート要求の形式が不正です"
+          }
+        ]
+      };
+    }
+
+    const successGroupIds: string[] = [];
+    const failedGroupIds: string[] = [];
+    const failures: ExportFailure[] = [];
+    let successPhotoCount = 0;
+    let failedPhotoCount = 0;
+
+    for (const group of payload.groups) {
+      let groupHasFailure = false;
+      const shootingDate = sanitizePathSegment(group.shootingDate || "date-unknown");
+      const patientId = sanitizePathSegment(group.patientId || "patient-unknown");
+      const destinationFolder = path.join(payload.exportRootPath, shootingDate, patientId);
+
+      if (group.photos.length === 0) {
+        failedGroupIds.push(group.groupId);
+        failures.push({
+          groupId: group.groupId,
+          photoId: "",
+          originalFilename: "",
+          message: "撮影セットに写真がありません"
+        });
+        continue;
+      }
+
+      try {
+        await mkdir(destinationFolder, { recursive: true });
+      } catch (error) {
+        groupHasFailure = true;
+        failedGroupIds.push(group.groupId);
+        failedPhotoCount += group.photos.length;
+        failures.push({
+          groupId: group.groupId,
+          photoId: "",
+          originalFilename: "",
+          message: `出力先フォルダを作成できません: ${getErrorMessage(error)}`
+        });
+        continue;
+      }
+
+      for (const photo of group.photos) {
+        if (!photo.originalPath || !existsSync(photo.originalPath)) {
+          groupHasFailure = true;
+          failedPhotoCount += 1;
+          failures.push({
+            groupId: group.groupId,
+            photoId: photo.photoId,
+            originalFilename: photo.originalFilename,
+            message: "コピー元ファイルが見つかりません"
+          });
+          continue;
+        }
+
+        try {
+          const destinationPath = await resolveUniqueDestinationPath(destinationFolder, photo.exportFilename);
+          await copyFile(photo.originalPath, destinationPath);
+          successPhotoCount += 1;
+        } catch (error) {
+          groupHasFailure = true;
+          failedPhotoCount += 1;
+          failures.push({
+            groupId: group.groupId,
+            photoId: photo.photoId,
+            originalFilename: photo.originalFilename,
+            message: getErrorMessage(error)
+          });
+        }
+      }
+
+      if (groupHasFailure) {
+        failedGroupIds.push(group.groupId);
+      } else {
+        successGroupIds.push(group.groupId);
+      }
+    }
+
+    return {
+      status: failures.length > 0 ? "partial" : "success",
+      successGroupIds,
+      failedGroupIds: [...new Set(failedGroupIds)],
+      successPhotoCount,
+      failedPhotoCount,
+      failures
+    };
+  });
+}
+
+function isValidExportPayload(payload: ExportPhotoFilesPayload | null | undefined): payload is ExportPhotoFilesPayload {
+  return Boolean(
+    payload &&
+      typeof payload.exportRootPath === "string" &&
+      payload.exportRootPath.length > 0 &&
+      Array.isArray(payload.groups)
+  );
+}
+
+function sanitizePathSegment(value: string) {
+  const sanitized = value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").trim();
+  return sanitized.length > 0 ? sanitized : "unknown";
+}
+
+async function resolveUniqueDestinationPath(destinationFolder: string, exportFilename: string) {
+  const parsed = path.parse(sanitizeExportFilename(exportFilename));
+  let candidate = path.join(destinationFolder, `${parsed.name}${parsed.ext}`);
+  let index = 1;
+
+  while (existsSync(candidate)) {
+    candidate = path.join(destinationFolder, `${parsed.name}_${index}${parsed.ext}`);
+    index += 1;
+  }
+
+  return candidate;
+}
+
+function sanitizeExportFilename(filename: string) {
+  const parsed = path.parse(filename);
+  const safeName = sanitizePathSegment(parsed.name || "photo");
+  const safeExt = parsed.ext.replace(/[^a-zA-Z0-9.]/g, "").toLowerCase();
+  return `${safeName}${safeExt || ".jpg"}`;
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "コピーに失敗しました";
 }
 
 async function collectImageFiles(folderPath: string): Promise<LocalImageFile[]> {
