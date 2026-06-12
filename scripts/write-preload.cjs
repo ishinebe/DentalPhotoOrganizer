@@ -9,7 +9,9 @@ console.log("PRELOAD LOADED");
 
 contextBridge.exposeInMainWorld("electronAPI", {
   selectImageFolder: () => ipcRenderer.invoke("select-image-folder"),
-  loadImagePreview: (filePath) => ipcRenderer.invoke("load-image-preview", filePath)
+  loadImagePreview: (filePath) => ipcRenderer.invoke("load-image-preview", filePath),
+  selectExportFolder: () => ipcRenderer.invoke("select-export-folder"),
+  exportPhotoFiles: (payload) => ipcRenderer.invoke("export-photo-files", payload)
 });
 `;
 
