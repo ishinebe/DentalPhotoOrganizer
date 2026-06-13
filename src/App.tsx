@@ -178,8 +178,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 7-A</span>
-          <strong>撮影種別ラベル</strong>
+          <span>Phase 7-B</span>
+          <strong>実QR境界判定</strong>
         </div>
       </aside>
 
@@ -635,12 +635,24 @@ function isQrFilename(filename: string | null | undefined) {
   return Boolean(filename?.toLowerCase().includes("qr"));
 }
 
-function isQrPhoto(photo: ReviewGroupPhoto | null) {
-  return isQrFilename(photo?.original_filename);
+function hasDetectedQrCode(photo: { code_type?: string | null; code_text?: string | null } | null | undefined) {
+  return photo?.code_type?.toLowerCase() === "qrcode" && Boolean(photo.code_text?.trim());
 }
 
-function getInitialPhotoType(photo: Pick<ReviewGroupPhoto, "photo_type" | "original_filename"> | Pick<ExportGroupPhoto, "photo_type" | "original_filename">) {
-  return photo.photo_type ?? (isQrFilename(photo.original_filename) ? "qr" : "unclassified");
+function isQrPhoto(photo: ReviewGroupPhoto | null) {
+  return hasDetectedQrCode(photo) || isQrFilename(photo?.original_filename);
+}
+
+function getInitialPhotoType(
+  photo:
+    | Pick<ReviewGroupPhoto, "photo_type" | "original_filename" | "code_type" | "code_text">
+    | Pick<ExportGroupPhoto, "photo_type" | "original_filename">
+) {
+  const detectedQr =
+    "code_type" in photo && "code_text" in photo
+      ? hasDetectedQrCode(photo) || isQrFilename(photo.original_filename)
+      : isQrFilename(photo.original_filename);
+  return photo.photo_type ?? (detectedQr ? "qr" : "unclassified");
 }
 
 function getPhotoTypeLabel(value: string | null | undefined) {
@@ -1214,7 +1226,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
 
   const handleRegroupByQrBoundaries = async () => {
     const confirmed = window.confirm(
-      "pending写真の撮影セット所属を整理し、ファイル名のQR境界で撮影セットを再作成します。approved写真と元画像ファイルは変更しません。よろしいですか？"
+      "pending写真の撮影セット所属を整理し、検出済みQR情報を優先して撮影セットを再作成します。approved写真と元画像ファイルは変更しません。よろしいですか？"
     );
 
     if (!confirmed) {
@@ -2102,7 +2114,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.8.0 Phase 7-A</dd>
+            <dd>0.8.1 Phase 7-B</dd>
           </div>
           <div>
             <dt>構成</dt>

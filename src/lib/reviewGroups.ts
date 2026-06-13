@@ -1069,9 +1069,9 @@ function buildQrBoundaryPhotoSets(photos: PhotoRow[]) {
   let currentSet: PhotoSet | null = null;
 
   for (const photo of photos) {
-    if (isQrBoundaryFilename(photo.original_filename)) {
+    if (isQrBoundaryPhoto(photo)) {
       currentSet = {
-        qrPatientCandidate: extractQrPatientCandidate(photo.original_filename),
+        qrPatientCandidate: extractQrPatientCandidate(photo),
         photos: []
       };
       sets.push(currentSet);
@@ -1091,11 +1091,56 @@ function buildQrBoundaryPhotoSets(photos: PhotoRow[]) {
   return sets.filter((set) => set.photos.length > 0);
 }
 
+function isDetectedQrCode(photo: Pick<PhotoRow, "code_type" | "code_text">) {
+  return photo.code_type?.toLowerCase() === "qrcode" && Boolean(photo.code_text?.trim());
+}
+
+function isQrBoundaryPhoto(photo: Pick<PhotoRow, "original_filename" | "code_type" | "code_text">) {
+  return isDetectedQrCode(photo) || isQrBoundaryFilename(photo.original_filename);
+}
+
 function isQrBoundaryFilename(filename: string) {
   return /qr/i.test(filename);
 }
 
-function extractQrPatientCandidate(filename: string) {
+function extractQrPatientCandidate(photo: Pick<PhotoRow, "original_filename" | "code_type" | "code_text">) {
+  const codeCandidate = extractQrPatientCandidateFromCodeText(photo);
+  if (codeCandidate) {
+    return codeCandidate;
+  }
+
+  return extractQrPatientCandidateFromFilename(photo.original_filename);
+}
+
+function extractQrPatientCandidateFromCodeText(photo: Pick<PhotoRow, "code_type" | "code_text">) {
+  if (!isDetectedQrCode(photo) || !photo.code_text) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(photo.code_text) as { patient_id?: unknown; patientId?: unknown; patient?: unknown };
+    const patientId = parsed.patient_id ?? parsed.patientId ?? parsed.patient;
+    if (typeof patientId === "string" && patientId.trim()) {
+      return patientId.trim();
+    }
+
+    if (typeof patientId === "number") {
+      return String(patientId);
+    }
+  } catch {
+    // Non-JSON QR payloads are parsed by the fallback regex below.
+  }
+
+  const patientIdMatch = photo.code_text.match(/patient[_-]?id["'=:\s]+([a-z0-9-]+)/i);
+  if (patientIdMatch?.[1]) {
+    return patientIdMatch[1];
+  }
+
+  const patientMatch = photo.code_text.match(/qr[_-]?patient[_-]?([a-z0-9]+)/i);
+  return patientMatch?.[1] ?? null;
+}
+
+function extractQrPatientCandidateFromFilename(filename: string) {
   const match = filename.match(/qr[_-]?patient[_-]?([a-z0-9]+)/i);
   return match?.[1] ?? null;
 }
@@ -1208,7 +1253,7 @@ async function fetchGroupDisplaySummaries(items: GroupItemRow[]) {
   const photoIds = [...new Set(items.map((item) => item.photo_id))];
   const { data, error } = await supabase
     .from("photos")
-    .select("id,original_filename,original_path,imported_at,notes")
+    .select("id,original_filename,original_path,code_type,code_text,imported_at,notes")
     .in("id", photoIds);
 
   if (error) {
@@ -1228,13 +1273,13 @@ async function fetchGroupDisplaySummaries(items: GroupItemRow[]) {
     const groupPhotos = sortPhotosForQrBoundaryGrouping(
       groupItems.map((item) => photoById.get(item.photo_id)).filter((photo): photo is PhotoRow => Boolean(photo))
     );
-    const qrPhotos = groupPhotos.filter((photo) => isQrBoundaryFilename(photo.original_filename));
+    const qrPhotos = groupPhotos.filter((photo) => isQrBoundaryPhoto(photo));
     const qrPhoto = qrPhotos[0] ?? null;
     const representativePhoto =
-      groupPhotos.find((photo) => !isQrBoundaryFilename(photo.original_filename)) ?? groupPhotos[0] ?? null;
+      groupPhotos.find((photo) => !isQrBoundaryPhoto(photo)) ?? groupPhotos[0] ?? null;
     const noteSourcePhoto = groupPhotos.find((photo) => photo.notes);
     summaries.set(groupId, {
-      qrPatientCandidate: qrPhoto ? extractQrPatientCandidate(qrPhoto.original_filename) : null,
+      qrPatientCandidate: qrPhoto ? extractQrPatientCandidate(qrPhoto) : null,
       hasQrPhoto: Boolean(qrPhoto),
       qrPhotoCount: qrPhotos.length,
       notes: noteSourcePhoto?.notes ?? null,

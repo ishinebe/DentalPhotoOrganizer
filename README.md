@@ -414,7 +414,7 @@ Phase4-A only detects, stores, and displays code metadata. It does not automatic
 
 ## Phase4-A QR boundary photo sets
 
-Review now groups unassigned pending photos into shooting sets by QR filename boundaries.
+Review now groups unassigned pending photos into shooting sets by QR boundaries. The current implementation prefers detected QR metadata (`photos.code_type = qrcode` with non-empty `photos.code_text`) and falls back to QR filenames for legacy test data.
 
 Grouping rule:
 
@@ -434,14 +434,14 @@ The Review screen includes a development button:
 QR境界で撮影セット再作成
 ```
 
-This button removes group memberships for pending photos, deletes empty pending groups, and recreates pending shooting sets from QR filename boundaries. It never modifies image files or approved photos.
+This button removes group memberships for pending photos, deletes empty pending groups, and recreates pending shooting sets from detected QR boundaries. Filename-based QR boundaries remain as a fallback. It never modifies image files or approved photos.
 
 ## Phase4-B review set list UI
 
 The Review screen shooting set list now displays operational review signals for each pending set:
 
 - Shooting set number
-- Patient ID candidate from `photo_groups.patient_id` or the QR filename-derived candidate
+- Patient ID candidate from `photo_groups.patient_id`, QR `code_text`, or the QR filename-derived fallback candidate
 - Photo count
 - QRあり / QRなし
 - Review status label
@@ -661,7 +661,23 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 7-A - 撮影種別ラベル
+Current phase: Phase 7-B - 実QR境界判定
+
+Phase7-B changes shooting set boundary detection to prefer actual QR detection metadata saved during Import:
+
+* Review grouping treats a photo as a QR boundary when `photos.code_type = qrcode` and `photos.code_text` is not empty.
+* Filename-based QR detection remains only as a fallback for legacy test data such as `QR_PATIENT_0001`.
+* QR patient candidates are extracted from `code_text` first, including JSON payloads such as `{"patient_id":"0001"}`.
+* Review QR badges, QRあり / QRなし, patient candidates, and 要確認 reasons use the same detected-QR-first rule.
+* No Electron API changes are required for this phase.
+
+Real environment verification for Phase7-B:
+
+1. Import real QR images and confirm `photos.code_type = qrcode` and `photos.code_text` has a value.
+2. Open Review and confirm QR-detected photos start shooting set boundaries.
+3. Confirm QR-free photo runs still become a single unclassified shooting set when needed.
+4. Confirm filename-based `QR_PATIENT_0001` test images still work as a fallback.
+5. Confirm Review QR badges, patient ID candidates, and 要確認 reasons are consistent.
 
 Phase7-A adds manual photo type labeling to the Review workflow:
 
