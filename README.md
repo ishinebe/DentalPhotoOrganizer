@@ -661,7 +661,17 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 7-C - 撮影種別チェック
+Current phase: Phase 7-D0 - 撮影種別マスタ設計
+
+Phase7-D0 centralizes photo type and photo protocol definitions for future 5-view, 9-view, 14-view, partial, and other shooting workflows:
+
+* `src/lib/photoTypes.ts` is the source of truth for photo type labels, display order, categories, and selectable options.
+* The supported photo protocols are `five_view`, `nine_view`, `fourteen_view`, `partial`, and `other`.
+* `five_view` defines the current standard required types: `front`, `right_buccal`, `left_buccal`, `upper_occlusal`, and `lower_occlusal`.
+* `nine_view` is defined as a protocol and currently reuses the five-view required types until the additional four clinic-specific labels are finalized.
+* `fourteen_view` is defined as a selectable protocol placeholder; required photo types are intentionally left empty for a future phase.
+* Existing Review completeness checks continue to behave as the five-view protocol.
+* Review and Export thumbnail display order is unchanged from Phase7-C.
 
 Phase7-C uses saved `photos.photo_type` values to make Review and pre-export checking easier:
 

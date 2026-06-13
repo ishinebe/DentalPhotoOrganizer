@@ -18,6 +18,13 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
 import {
+  getPhotoTypeLabel,
+  getPhotoTypeOrder,
+  getRequiredPhotoTypesForProtocol,
+  photoTypeOptions,
+  type PhotoTypeValue
+} from "./lib/photoTypes";
+import {
   fetchReadyExportGroups,
   markGroupsExported,
   type ExportGroup,
@@ -121,37 +128,10 @@ const emptyReviewForm: ReviewGroupForm = {
   notes: ""
 };
 
-const photoTypeOptions = [
-  { value: "unclassified", label: "未分類" },
-  { value: "qr", label: "QR" },
-  { value: "front", label: "正面観" },
-  { value: "upper_occlusal", label: "上顎咬合面観" },
-  { value: "lower_occlusal", label: "下顎咬合面観" },
-  { value: "right_buccal", label: "右側方面観" },
-  { value: "left_buccal", label: "左側方面観" },
-  { value: "other", label: "その他" }
-] as const;
-
-type PhotoTypeValue = (typeof photoTypeOptions)[number]["value"];
-
-const standardPhotoTypes: Array<{ value: PhotoTypeValue; label: string }> = [
-  { value: "front", label: "正面観" },
-  { value: "right_buccal", label: "右側方面観" },
-  { value: "left_buccal", label: "左側方面観" },
-  { value: "upper_occlusal", label: "上顎咬合面観" },
-  { value: "lower_occlusal", label: "下顎咬合面観" }
-];
-
-const photoTypeDisplayOrder: PhotoTypeValue[] = [
-  "qr",
-  "front",
-  "right_buccal",
-  "left_buccal",
-  "upper_occlusal",
-  "lower_occlusal",
-  "other",
-  "unclassified"
-];
+const standardPhotoTypes = getRequiredPhotoTypesForProtocol("five_view").map((value) => ({
+  value,
+  label: getPhotoTypeLabel(value)
+}));
 
 type ReviewOpenTarget = {
   groupId: string;
@@ -197,8 +177,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 7-C</span>
-          <strong>撮影種別チェック</strong>
+          <span>Phase 7-D0</span>
+          <strong>撮影種別マスタ設計</strong>
         </div>
       </aside>
 
@@ -669,16 +649,6 @@ function getInitialPhotoType(
 ) {
   const detectedQr = hasDetectedQrCode(photo) || isQrFilename(photo.original_filename);
   return photo.photo_type ?? (detectedQr ? "qr" : "unclassified");
-}
-
-function getPhotoTypeLabel(value: string | null | undefined) {
-  const normalized = value && photoTypeOptions.some((option) => option.value === value) ? value : "unclassified";
-  return photoTypeOptions.find((option) => option.value === normalized)?.label ?? "未分類";
-}
-
-function getPhotoTypeOrder(value: string | null | undefined) {
-  const normalized = value && photoTypeDisplayOrder.includes(value as PhotoTypeValue) ? (value as PhotoTypeValue) : "unclassified";
-  return photoTypeDisplayOrder.indexOf(normalized);
 }
 
 function sortPhotosForDisplay<T extends { original_filename: string; sort_order?: number | null }>(
@@ -2181,7 +2151,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.8.2 Phase 7-C</dd>
+            <dd>0.8.3 Phase 7-D0</dd>
           </div>
           <div>
             <dt>構成</dt>
