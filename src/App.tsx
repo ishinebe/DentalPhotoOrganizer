@@ -120,8 +120,14 @@ const emptyReviewForm: ReviewGroupForm = {
   notes: ""
 };
 
+type ReviewOpenTarget = {
+  groupId: string;
+  status: ReviewGroupListStatus;
+};
+
 function App() {
   const [activeView, setActiveView] = useState<View>("dashboard");
+  const [reviewOpenTarget, setReviewOpenTarget] = useState<ReviewOpenTarget | null>(null);
 
   const title = useMemo(() => {
     return navItems.find((item) => item.id === activeView)?.label ?? "Dashboard";
@@ -178,8 +184,15 @@ function App() {
         <section className="content-area">
           {activeView === "dashboard" && <Dashboard />}
           {activeView === "import" && <Import />}
-          {activeView === "review" && <Review />}
-          {activeView === "export" && <ExportView />}
+          {activeView === "review" && <Review openTarget={reviewOpenTarget} />}
+          {activeView === "export" && (
+            <ExportView
+              onOpenReview={(groupId) => {
+                setReviewOpenTarget({ groupId, status: "approved" });
+                setActiveView("review");
+              }}
+            />
+          )}
           {activeView === "search" && <SearchView />}
           {activeView === "settings" && <SettingsView />}
         </section>
@@ -645,7 +658,7 @@ function getPhotoSlotLabel(index: number) {
   return labels[index] ?? `写真${index + 1}`;
 }
 
-function Review() {
+function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
   const [reviewListStatus, setReviewListStatus] = useState<ReviewGroupListStatus>("pending");
   const [groups, setGroups] = useState<ReviewGroup[]>([]);
   const [groupPhotos, setGroupPhotos] = useState<ReviewGroupPhoto[]>([]);
@@ -681,12 +694,13 @@ function Review() {
   const isApprovedMode = reviewListStatus === "approved";
   const canReturnToPending = Boolean(selectedGroup && selectedGroup.review_status === "approved" && selectedGroup.export_status !== "exported");
 
-  const loadGroups = useCallback(async (preferredGroupId?: string | null) => {
+  const loadGroups = useCallback(async (preferredGroupId?: string | null, statusOverride?: ReviewGroupListStatus) => {
+    const targetStatus = statusOverride ?? reviewListStatus;
     setLoadStatus("読み込み中");
     setActionStatus("待機中");
-    setMessage(reviewListStatus === "pending" ? "確認待ちの撮影セットを読み込んでいます" : "確認済みの撮影セットを読み込んでいます");
+    setMessage(targetStatus === "pending" ? "確認待ちの撮影セットを読み込んでいます" : "確認済みの撮影セットを読み込んでいます");
 
-    const result = await fetchReviewGroupsByStatus(reviewListStatus);
+    const result = await fetchReviewGroupsByStatus(targetStatus);
 
     if (result.status === "not-configured") {
       setGroups([]);
@@ -717,10 +731,10 @@ function Review() {
     setLoadStatus(result.groups.length > 0 ? "表示中" : "データなし");
     setMessage(
       result.groups.length > 0
-        ? reviewListStatus === "pending"
+        ? targetStatus === "pending"
           ? "確認待ちの撮影セットを表示しています"
           : "確認済みの撮影セットを表示しています"
-        : reviewListStatus === "pending"
+        : targetStatus === "pending"
           ? "確認待ちの撮影セットはありません"
           : "確認済みの撮影セットはありません"
     );
@@ -729,6 +743,15 @@ function Review() {
   useEffect(() => {
     void loadGroups();
   }, [loadGroups]);
+
+  useEffect(() => {
+    if (!openTarget) {
+      return;
+    }
+
+    setReviewListStatus(openTarget.status);
+    void loadGroups(openTarget.groupId, openTarget.status);
+  }, [loadGroups, openTarget]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -1554,8 +1577,10 @@ function Review() {
 }
 
 
-function ExportView() {
+function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void }) {
   const [groups, setGroups] = useState<ExportGroup[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [exportThumbnailUrls, setExportThumbnailUrls] = useState<Record<string, string>>({});
   const [loadStatus, setLoadStatus] = useState<ExportLoadStatus>("読み込み中");
   const [actionStatus, setActionStatus] = useState<ExportActionStatus>("待機中");
   const [message, setMessage] = useState("エクスポート対象を読み込んでいます");
@@ -1573,6 +1598,7 @@ function ExportView() {
   const isBusy = loadStatus === "読み込み中" || actionStatus === "フォルダ選択中" || actionStatus === "エクスポート中";
   const targetPhotoCount = countExportPhotos(groups);
   const canExport = isElectronApiConnected && Boolean(exportRootPath) && groups.length > 0 && targetPhotoCount > 0 && !isBusy;
+  const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
 
   const loadExportTargets = useCallback(async () => {
     setLoadStatus("読み込み中");
@@ -1596,6 +1622,7 @@ function ExportView() {
     }
 
     setGroups(result.groups);
+    setSelectedGroupId((current) => (current && result.groups.some((group) => group.id === current) ? current : result.groups[0]?.id ?? null));
     setLoadStatus(result.groups.length > 0 ? "表示中" : "データなし");
     setMessage(result.message);
   }, []);
@@ -1603,6 +1630,47 @@ function ExportView() {
   useEffect(() => {
     void loadExportTargets();
   }, [loadExportTargets]);
+
+  useEffect(() => {
+    let isCurrent = true;
+    const previewApi = window.electronAPI?.loadImagePreview;
+    const thumbnailTargets = (selectedGroup?.photos ?? [])
+      .filter((photo) => photo.original_path)
+      .slice(0, 24)
+      .map((photo) => ({
+        photoId: photo.id,
+        path: photo.original_path as string
+      }));
+
+    setExportThumbnailUrls({});
+
+    if (!previewApi || thumbnailTargets.length === 0) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void Promise.all(
+      thumbnailTargets.map(async (target) => {
+        try {
+          const result = await previewApi(target.path);
+          return result.status === "success" && result.dataUrl ? [target.photoId, result.dataUrl] : null;
+        } catch {
+          return null;
+        }
+      })
+    ).then((entries) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      setExportThumbnailUrls(Object.fromEntries(entries.filter((entry): entry is [string, string] => Boolean(entry))));
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedGroup]);
 
   const handleSelectExportFolder = async () => {
     if (!window.electronAPI?.selectExportFolder) {
@@ -1754,6 +1822,70 @@ function ExportView() {
           <span>{message}</span>
         </div>
 
+        {selectedGroup ? (
+          <section className="export-preview-panel">
+            <div className="column-title">
+              <h2>選択中の撮影セット確認</h2>
+              <span>{selectedGroup.photos.length}枚</span>
+            </div>
+            <dl className="export-preview-meta">
+              <div>
+                <dt>患者ID</dt>
+                <dd>{selectedGroup.patient_id ?? "未設定"}</dd>
+              </div>
+              <div>
+                <dt>撮影日</dt>
+                <dd>{formatDate(selectedGroup.shooting_date)}</dd>
+              </div>
+              <div>
+                <dt>写真枚数</dt>
+                <dd>{selectedGroup.photos.length}枚</dd>
+              </div>
+              <div>
+                <dt>担当医</dt>
+                <dd>{selectedGroup.doctor_name ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>撮影者</dt>
+                <dd>{selectedGroup.photographer_name ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>status</dt>
+                <dd>
+                  {selectedGroup.review_status} / {selectedGroup.export_status}
+                </dd>
+              </div>
+            </dl>
+            <div className="export-preview-header">
+              <strong>撮影セット内写真</strong>
+              <button type="button" onClick={() => onOpenReview(selectedGroup.id)}>
+                確認画面で開く
+              </button>
+            </div>
+            <div className="export-photo-strip">
+              {selectedGroup.photos.map((photo, index) => (
+                <div className="export-photo-thumb-card" key={photo.id}>
+                  <span className="group-photo-thumb">
+                    {exportThumbnailUrls[photo.id] ? (
+                      <img src={exportThumbnailUrls[photo.id]} alt={photo.original_filename} />
+                    ) : (
+                      <ImageIcon size={18} />
+                    )}
+                    {photo.original_filename.toLowerCase().includes("qr") && <em>QR</em>}
+                  </span>
+                  <strong>{getPhotoSlotLabel(index)}</strong>
+                  <span>{photo.original_filename}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <div className="empty-result compact">
+            <HardDriveDownload size={24} />
+            <span>撮影セットを選択すると、エクスポート前確認が表示されます</span>
+          </div>
+        )}
+
         {resultSummary && (
           <section className="export-result-panel">
             <h3>エクスポート結果</h3>
@@ -1792,14 +1924,19 @@ function ExportView() {
         </div>
         <div className="export-target-list">
           {groups.map((group) => (
-            <article className="export-target-card" key={group.id}>
+            <button
+              className={selectedGroup?.id === group.id ? "export-target-card active" : "export-target-card"}
+              key={group.id}
+              type="button"
+              onClick={() => setSelectedGroupId(group.id)}
+            >
               <strong>{group.patient_id ?? "患者ID未設定"}</strong>
               <span>撮影日: {formatDate(group.shooting_date)}</span>
               <span>写真枚数: {group.photos.length}枚</span>
               <span>担当医: {group.doctor_name ?? "-"}</span>
               <span>撮影者: {group.photographer_name ?? "-"}</span>
               <em>{group.export_status}</em>
-            </article>
+            </button>
           ))}
           {groups.length === 0 && (
             <div className="empty-result compact">

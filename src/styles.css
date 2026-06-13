@@ -1501,6 +1501,99 @@ textarea:focus {
   padding: 16px;
 }
 
+.export-preview-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #d9e3ef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.export-preview-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.export-preview-meta div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #d8e3ee;
+  border-radius: 8px;
+  background: #f8fbfe;
+}
+
+.export-preview-meta dt {
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.export-preview-meta dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: #1d2939;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.export-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.export-preview-header strong {
+  color: #12283f;
+}
+
+.export-preview-header button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid #1265b4;
+  border-radius: 8px;
+  color: #1265b4;
+  background: #eef6ff;
+  font-weight: 700;
+}
+
+.export-photo-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.export-photo-thumb-card {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #d9e3ef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.export-photo-thumb-card strong,
+.export-photo-thumb-card span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.export-photo-thumb-card strong {
+  color: #12283f;
+  font-size: 0.84rem;
+}
+
+.export-photo-thumb-card span {
+  color: #667085;
+  font-size: 0.76rem;
+}
+
 .export-result-panel dl {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1555,10 +1648,20 @@ textarea:focus {
 .export-target-card {
   display: grid;
   gap: 4px;
+  width: 100%;
   padding: 13px;
   border: 1px solid #d8e3ee;
   border-radius: 8px;
+  color: #1d2939;
   background: #ffffff;
+  text-align: left;
+}
+
+.export-target-card:hover,
+.export-target-card.active {
+  border-color: #1265b4;
+  background: #eef6ff;
+  box-shadow: 0 0 0 3px rgba(18, 101, 180, 0.12);
 }
 
 .export-target-card strong {
