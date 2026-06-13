@@ -661,7 +661,24 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 7-B - 実QR境界判定
+Current phase: Phase 7-C - 撮影種別チェック
+
+Phase7-C uses saved `photos.photo_type` values to make Review and pre-export checking easier:
+
+* Review shows a `撮影種別チェック` panel in the selected shooting set overview.
+* The standard required photo types are `front`, `right_buccal`, `left_buccal`, `upper_occlusal`, and `lower_occlusal`.
+* `qr` and `other` are displayed as photo types but are not required by the standard completeness check.
+* Review thumbnails are displayed in this order: QR, 正面観, 右側方面観, 左側方面観, 上顎咬合面観, 下顎咬合面観, その他, 未分類.
+* Export pre-check thumbnails use the same display order.
+* This phase does not change `photo_group_items.sort_order`, export copy behavior, or DB export status updates.
+
+Real environment verification for Phase7-C:
+
+1. Open Review and select a shooting set.
+2. Confirm `撮影種別チェック` shows each standard type as present or missing.
+3. Change a photo type dropdown and confirm the completeness check updates immediately.
+4. Confirm Review thumbnails follow the standard display order.
+5. Open Export and confirm the pre-export thumbnail order matches Review.
 
 Phase7-B changes shooting set boundary detection to prefer actual QR detection metadata saved during Import:
 

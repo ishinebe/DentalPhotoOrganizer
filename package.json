@@ -1,8 +1,8 @@
 {
   "name": "dental-photo-organizer",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
-  "description": "DentalPhotoOrganizer Phase7-B detected QR boundary grouping",
+  "description": "DentalPhotoOrganizer Phase7-C photo type completeness check",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {

@@ -134,6 +134,25 @@ const photoTypeOptions = [
 
 type PhotoTypeValue = (typeof photoTypeOptions)[number]["value"];
 
+const standardPhotoTypes: Array<{ value: PhotoTypeValue; label: string }> = [
+  { value: "front", label: "正面観" },
+  { value: "right_buccal", label: "右側方面観" },
+  { value: "left_buccal", label: "左側方面観" },
+  { value: "upper_occlusal", label: "上顎咬合面観" },
+  { value: "lower_occlusal", label: "下顎咬合面観" }
+];
+
+const photoTypeDisplayOrder: PhotoTypeValue[] = [
+  "qr",
+  "front",
+  "right_buccal",
+  "left_buccal",
+  "upper_occlusal",
+  "lower_occlusal",
+  "other",
+  "unclassified"
+];
+
 type ReviewOpenTarget = {
   groupId: string;
   status: ReviewGroupListStatus;
@@ -178,8 +197,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 7-B</span>
-          <strong>実QR境界判定</strong>
+          <span>Phase 7-C</span>
+          <strong>撮影種別チェック</strong>
         </div>
       </aside>
 
@@ -646,18 +665,39 @@ function isQrPhoto(photo: ReviewGroupPhoto | null) {
 function getInitialPhotoType(
   photo:
     | Pick<ReviewGroupPhoto, "photo_type" | "original_filename" | "code_type" | "code_text">
-    | Pick<ExportGroupPhoto, "photo_type" | "original_filename">
+    | Pick<ExportGroupPhoto, "photo_type" | "original_filename" | "code_type" | "code_text">
 ) {
-  const detectedQr =
-    "code_type" in photo && "code_text" in photo
-      ? hasDetectedQrCode(photo) || isQrFilename(photo.original_filename)
-      : isQrFilename(photo.original_filename);
+  const detectedQr = hasDetectedQrCode(photo) || isQrFilename(photo.original_filename);
   return photo.photo_type ?? (detectedQr ? "qr" : "unclassified");
 }
 
 function getPhotoTypeLabel(value: string | null | undefined) {
   const normalized = value && photoTypeOptions.some((option) => option.value === value) ? value : "unclassified";
   return photoTypeOptions.find((option) => option.value === normalized)?.label ?? "未分類";
+}
+
+function getPhotoTypeOrder(value: string | null | undefined) {
+  const normalized = value && photoTypeDisplayOrder.includes(value as PhotoTypeValue) ? (value as PhotoTypeValue) : "unclassified";
+  return photoTypeDisplayOrder.indexOf(normalized);
+}
+
+function sortPhotosForDisplay<T extends { original_filename: string; sort_order?: number | null }>(
+  photos: T[],
+  getType: (photo: T) => string
+) {
+  return [...photos].sort((a, b) => {
+    const typeDiff = getPhotoTypeOrder(getType(a)) - getPhotoTypeOrder(getType(b));
+    if (typeDiff !== 0) {
+      return typeDiff;
+    }
+
+    const sortOrderDiff = (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER);
+    if (sortOrderDiff !== 0) {
+      return sortOrderDiff;
+    }
+
+    return a.original_filename.localeCompare(b.original_filename, "ja-JP", { numeric: true, sensitivity: "base" });
+  });
 }
 
 function roleMatches(staff: StaffMember, keywords: string[]) {
@@ -719,7 +759,19 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
   const [mergeTargetGroupId, setMergeTargetGroupId] = useState("");
 
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
-  const selectedPhoto = groupPhotos.find((photo) => photo.id === selectedPhotoId) ?? groupPhotos[0] ?? null;
+  const sortedGroupPhotos = useMemo(
+    () => sortPhotosForDisplay(groupPhotos, (photo) => photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo)),
+    [groupPhotos, photoTypeDrafts]
+  );
+  const photoTypeCompleteness = useMemo(
+    () =>
+      standardPhotoTypes.map((standardType) => ({
+        ...standardType,
+        present: groupPhotos.some((photo) => (photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo)) === standardType.value)
+      })),
+    [groupPhotos, photoTypeDrafts]
+  );
+  const selectedPhoto = groupPhotos.find((photo) => photo.id === selectedPhotoId) ?? sortedGroupPhotos[0] ?? null;
   const selectedPatientCandidate = getGroupPatientCandidate(selectedGroup);
   const selectedAttentionReasons = getAttentionReasonText(selectedGroup);
   const otherGroups = useMemo(
@@ -917,7 +969,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
       }
 
       setGroupPhotos(result.photos);
-      setSelectedPhotoId(result.photos[0]?.id ?? null);
+      setSelectedPhotoId(sortPhotosForDisplay(result.photos, getInitialPhotoType)[0]?.id ?? null);
     });
 
     return () => {
@@ -1384,6 +1436,17 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
                   <dd>{selectedAttentionReasons}</dd>
                 </div>
               </dl>
+              <div className="photo-type-check-panel">
+                <strong>撮影種別チェック</strong>
+                <div className="photo-type-check-list">
+                  {photoTypeCompleteness.map((item) => (
+                    <span className={item.present ? "complete" : "missing"} key={item.value}>
+                      <em>{item.present ? "✓" : "不足"}</em>
+                      {item.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </section>
             <div className={`preview-frame ${previewStatus === "表示中" ? "ready" : ""}`}>
               {isQrPhoto(selectedPhoto) && <span className="preview-type-badge">QR画像</span>}
@@ -1416,7 +1479,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
             )}
 
             <div className="group-photo-grid">
-              {groupPhotos.map((photo) => (
+              {sortedGroupPhotos.map((photo) => (
                 <article
                   key={photo.id}
                   className={selectedPhoto?.id === photo.id ? "group-photo-card active" : "group-photo-card"}
@@ -1692,6 +1755,10 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
   const targetPhotoCount = countExportPhotos(groups);
   const canExport = isElectronApiConnected && Boolean(exportRootPath) && groups.length > 0 && targetPhotoCount > 0 && !isBusy;
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
+  const sortedSelectedExportPhotos = useMemo(
+    () => (selectedGroup ? sortPhotosForDisplay(selectedGroup.photos, getInitialPhotoType) : []),
+    [selectedGroup]
+  );
 
   const loadExportTargets = useCallback(async () => {
     setLoadStatus("読み込み中");
@@ -1956,7 +2023,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
               </button>
             </div>
             <div className="export-photo-strip">
-              {selectedGroup.photos.map((photo) => (
+              {sortedSelectedExportPhotos.map((photo) => (
                 <div className="export-photo-thumb-card" key={photo.id}>
                   <span className="group-photo-thumb">
                     {exportThumbnailUrls[photo.id] ? (
@@ -1964,7 +2031,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
                     ) : (
                       <ImageIcon size={18} />
                     )}
-                    {photo.original_filename.toLowerCase().includes("qr") && <em>QR</em>}
+                    {(hasDetectedQrCode(photo) || isQrFilename(photo.original_filename)) && <em>QR</em>}
                   </span>
                   <strong>{getPhotoTypeLabel(getInitialPhotoType(photo))}</strong>
                   <span>{photo.original_filename}</span>
@@ -2114,7 +2181,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.8.1 Phase 7-B</dd>
+            <dd>0.8.2 Phase 7-C</dd>
           </div>
           <div>
             <dt>構成</dt>
