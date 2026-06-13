@@ -141,3 +141,26 @@ The interface should reduce unnecessary clicks, context switching, and cognitive
 
 Status:
 Accepted
+
+---
+
+## Decision 0010
+
+Title:
+Exported does not mean permanently locked.
+
+Reason:
+Clinical photo organization may require later correction or addition. A photo that was initially excluded from export may later become necessary, and a patient folder that was already exported may need additional photographs.
+
+Decision:
+The exported status means that the patient photo set has been exported at least once. It must not be treated as a permanent lock state. Future workflows should allow users to re-check exported patients, add or reclassify photographs when needed, and perform additional export without destroying existing exported files.
+
+Design implications:
+- Existing exported folders should not be deleted or overwritten silently.
+- Additional export should prefer copying only newly needed photographs or otherwise avoid destructive changes.
+- If full re-export is introduced later, it should preserve or back up the previous exported folder.
+- Future UI may allow each photograph to be marked as included in export or excluded from export.
+- A photograph excluded from export should remain available for later inclusion.
+
+Status:
+Accepted
