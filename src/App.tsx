@@ -79,9 +79,9 @@ type ReviewActionStatus =
   | "統合中"
   | "統合成功"
   | "統合失敗"
-  | "セット再作成中"
-  | "セット再作成成功"
-  | "セット再作成失敗";
+  | "分け直し中"
+  | "分け直し成功"
+  | "分け直し失敗";
 type PreviewStatus = "未選択" | "読み込み中" | "表示中" | "読み込み失敗" | "未対応形式" | "Electron API未接続";
 type ExportLoadStatus = "読み込み中" | "表示中" | "データなし" | "取得失敗" | "Supabase未設定";
 type ExportActionStatus = "待機中" | "フォルダ選択中" | "エクスポート中" | "エクスポート完了" | "エクスポート失敗";
@@ -178,8 +178,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 7-D3</span>
-          <strong>写真確認UI改善</strong>
+          <span>Phase 7-D4</span>
+          <strong>写真確認用語改善</strong>
         </div>
       </aside>
 
@@ -603,7 +603,7 @@ function countExportPhotos(groups: ExportGroup[]) {
 
 function formatGroupOption(group: ReviewGroup) {
   const patientCandidate = getGroupPatientCandidate(group);
-  const label = patientCandidate ? `患者候補 ${patientCandidate}` : `患者写真セット ${group.id.slice(0, 8)}`;
+  const label = patientCandidate ? `患者候補 ${patientCandidate}` : `患者 ${group.id.slice(0, 8)}`;
   return `${label} / ${group.photo_count}枚`;
 }
 
@@ -773,7 +773,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     const targetStatus = statusOverride ?? reviewListStatus;
     setLoadStatus("読み込み中");
     setActionStatus("待機中");
-    setMessage(targetStatus === "pending" ? "確認待ちの患者写真セットを読み込んでいます" : "確認済みの患者写真セットを読み込んでいます");
+    setMessage(targetStatus === "pending" ? "確認待ちの患者を読み込んでいます" : "確認済みの患者を読み込んでいます");
 
     const result = await fetchReviewGroupsByStatus(targetStatus);
 
@@ -807,11 +807,11 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     setMessage(
       result.groups.length > 0
         ? targetStatus === "pending"
-          ? "確認待ちの患者写真セットを表示しています"
-          : "確認済みの患者写真セットを表示しています"
+          ? "確認待ちの患者を表示しています"
+          : "確認済みの患者を表示しています"
         : targetStatus === "pending"
-          ? "確認待ちの患者写真セットはありません"
-          : "確認済みの患者写真セットはありません"
+          ? "確認待ちの患者はいません"
+          : "確認済みの患者はいません"
     );
   }, [reviewListStatus]);
 
@@ -1121,7 +1121,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     }
 
     setActionStatus("確認完了中");
-    setMessage("入力内容を保存したうえで、患者写真セットを確認完了にしています");
+    setMessage("入力内容を保存したうえで、確認完了にしています");
 
     const result = await completeReviewGroup(selectedGroup.id, form, buildPhotoTypeUpdates());
 
@@ -1148,12 +1148,12 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
 
     if (selectedGroup.export_status === "exported") {
       setActionStatus("差し戻し失敗");
-      setMessage("この患者写真セットは書き出し済みのため、確認待ちには戻せません");
+      setMessage("この患者は書き出し済みのため、確認待ちには戻せません");
       return;
     }
 
     const confirmed = window.confirm(
-      "この患者写真セットを確認待ちに戻しますか？\n書き出し前の患者写真セットのみ対象です。"
+      "この患者の写真を確認待ちに戻しますか？\n書き出し前の写真のみ対象です。"
     );
 
     if (!confirmed) {
@@ -1161,7 +1161,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     }
 
     setActionStatus("差し戻し中");
-    setMessage("患者写真セットを確認待ちに戻しています");
+    setMessage("この患者の写真を確認待ちに戻しています");
 
     const result = await returnReviewGroupToPending(selectedGroup.id);
 
@@ -1188,7 +1188,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     }
 
     setActionStatus("移動中");
-    setMessage("写真を別の患者写真セットへ移動しています");
+    setMessage("写真を別の患者へ移動しています");
 
     const result = await movePhotoToGroup(selectedPhoto.id, moveTargetGroupId);
 
@@ -1211,7 +1211,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     }
 
     setActionStatus("分離中");
-    setMessage("写真を新しい患者写真セットへ分離しています");
+    setMessage("写真を新しい患者として分けています");
 
     const result = await splitPhotoToNewGroup(selectedPhoto.id);
 
@@ -1236,14 +1236,14 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     const targetGroup = groups.find((group) => group.id === mergeTargetGroupId);
     const targetLabel =
       targetGroup?.patient_id ?? targetGroup?.qr_patient_candidate ?? targetGroup?.id.slice(0, 8) ?? mergeTargetGroupId.slice(0, 8);
-    const confirmed = window.confirm(`選択中の患者写真セットを ${targetLabel} に統合します。よろしいですか？`);
+    const confirmed = window.confirm(`選択中の患者の写真を ${targetLabel} にまとめます。よろしいですか？`);
 
     if (!confirmed) {
       return;
     }
 
     setActionStatus("統合中");
-    setMessage("患者写真セットを統合しています");
+    setMessage("同じ患者の写真としてまとめています");
 
     const result = await mergeGroups(selectedGroup.id, mergeTargetGroupId);
 
@@ -1262,25 +1262,25 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
 
   const handleRegroupByQrBoundaries = async () => {
     const confirmed = window.confirm(
-      "確認待ち写真の患者写真セット所属を整理し、検出済みQR情報を優先して患者写真セットを再作成します。確認完了済み写真と元画像ファイルは変更しません。よろしいですか？"
+      "確認待ち写真を、検出済みQR情報を優先して患者ごとに分け直します。確認完了済み写真と元画像ファイルは変更しません。よろしいですか？"
     );
 
     if (!confirmed) {
       return;
     }
 
-    setActionStatus("セット再作成中");
-    setMessage("QR境界で患者写真セットを再作成しています");
+    setActionStatus("分け直し中");
+    setMessage("QRをもとに患者ごとに分け直しています");
 
     const result = await regroupPendingPhotosByQrBoundaries();
 
     if (result.status !== "success") {
-      setActionStatus("セット再作成失敗");
+      setActionStatus("分け直し失敗");
       setMessage(result.message);
       return;
     }
 
-    setActionStatus("セット再作成成功");
+    setActionStatus("分け直し成功");
     setMessage(result.message);
     setGroupPhotos([]);
     setSelectedPhotoId(null);
@@ -1294,13 +1294,13 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     actionStatus === "移動中" ||
     actionStatus === "分離中" ||
     actionStatus === "統合中" ||
-    actionStatus === "セット再作成中" ||
+    actionStatus === "分け直し中" ||
     loadStatus === "読み込み中";
 
   return (
     <div className="review-page">
       <div className="review-guidance">
-        QRコード画像を境界として自動作成された患者写真セットです。患者ID候補と写真のまとまりを確認してください。
+        QRコード画像を境界として自動作成された患者ごとの写真です。患者ID候補と写真のまとまりを確認してください。
       </div>
       <div className="review-mode-tabs" role="tablist" aria-label="確認状態の切り替え">
         <button
@@ -1323,7 +1323,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
       <div className="review-layout">
       <aside className="patient-column">
         <div className="column-title">
-          <h2>患者写真セット一覧</h2>
+          <h2>患者ごとの写真一覧</h2>
           <span>{groups.length}件</span>
         </div>
         <div className={`review-status ${loadStatus === "取得失敗" ? "error" : ""}`}>
@@ -1336,7 +1336,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
         </button>
         {reviewListStatus === "pending" && (
           <button className="review-refresh-button" type="button" onClick={handleRegroupByQrBoundaries} disabled={isBusy}>
-            QR境界で患者写真セット再作成
+            QRをもとに患者ごとに分け直す
           </button>
         )}
         <div className="patient-list review-photo-list">
@@ -1349,13 +1349,13 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
             >
               <div className="set-thumbnail">
                 {setThumbnailUrls[group.id] ? (
-                  <img src={setThumbnailUrls[group.id]} alt={group.representative_photo_filename ?? `患者写真セット ${index + 1}`} />
+                  <img src={setThumbnailUrls[group.id]} alt={group.representative_photo_filename ?? `患者 ${index + 1}`} />
                 ) : (
                   <ImageIcon size={22} />
                 )}
               </div>
               <div className="set-summary">
-                <strong>患者写真セット {index + 1}</strong>
+                <strong>患者 {index + 1}</strong>
                 <span>患者ID候補: {getGroupPatientCandidate(group) ?? "なし"}</span>
                 <span>
                   {group.photo_count}枚 / {group.has_qr_photo ? "QRあり" : "QRなし"}
@@ -1383,8 +1383,8 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
                 {loadStatus === "読み込み中"
                   ? "読み込み中"
                   : reviewListStatus === "pending"
-                    ? "確認待ち患者写真セットはありません"
-                    : "確認済み患者写真セットはありません"}
+                    ? "確認待ちの患者はいません"
+                    : "確認済みの患者はいません"}
               </span>
             </div>
           )}
@@ -1393,7 +1393,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
 
       <section className="thumbnail-column">
         <div className="column-title">
-          <h2>患者写真セット内写真</h2>
+          <h2>この患者の写真</h2>
           <span>{selectedGroup ? `${groupPhotos.length}枚` : "未選択"}</span>
         </div>
         {selectedGroup ? (
@@ -1401,7 +1401,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
             <section className={selectedGroup.needs_review_label ? "set-overview attention" : "set-overview"}>
               <div className="set-overview-header">
                 <div>
-                  <h3>患者写真セット概要</h3>
+                  <h3>患者の写真概要</h3>
                   <p>患者ID候補: {selectedPatientCandidate ?? "なし"}</p>
                 </div>
                 {selectedGroup.needs_review_label ? <strong>要確認</strong> : <strong className="clear">通常確認</strong>}
@@ -1528,52 +1528,76 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
               {groupPhotos.length === 0 && (
                 <div className="empty-result compact">
                   <ImageIcon size={24} />
-                  <span>この患者写真セットには写真がありません</span>
+                  <span>この患者には写真がありません</span>
                 </div>
               )}
             </div>
-            <dl className="detail-list">
-              <div>
-                <dt>original_filename</dt>
-                <dd>{selectedPhoto?.original_filename ?? "-"}</dd>
-              </div>
-              <div>
-                <dt>original_path</dt>
-                <dd>{selectedPhoto?.original_path ?? "-"}</dd>
-              </div>
-              <div>
-                <dt>file_hash</dt>
-                <dd>{selectedPhoto?.file_hash ?? "-"}</dd>
-              </div>
-              <div>
-                <dt>mime_type</dt>
-                <dd>{selectedPhoto?.mime_type ?? "-"}</dd>
-              </div>
-              <div>
-                <dt>Code Type</dt>
-                <dd>{selectedPhoto?.code_type ?? "-"}</dd>
-              </div>
-              <div>
-                <dt>Code Text</dt>
-                <dd>{selectedPhoto?.code_text ?? "-"}</dd>
-              </div>
-              <div>
-                <dt>file_size</dt>
-                <dd>{formatFileSize(selectedPhoto?.file_size ?? 0)}</dd>
-              </div>
-              <div>
-                <dt>imported_at</dt>
-                <dd>{formatDateTime(selectedPhoto?.imported_at ?? null)}</dd>
-              </div>
-              <div>
-                <dt>review_status</dt>
-                <dd>{selectedPhoto?.review_status ?? "-"}</dd>
-              </div>
-              <div>
-                <dt>export_status</dt>
-                <dd>{selectedPhoto?.export_status ?? "-"}</dd>
-              </div>
-            </dl>
+            {selectedPhoto && (
+              <section className="selected-photo-summary">
+                <h3>選択中の写真</h3>
+                <dl>
+                  <div>
+                    <dt>ファイル名</dt>
+                    <dd>{selectedPhoto.original_filename}</dd>
+                  </div>
+                  <div>
+                    <dt>撮影種別</dt>
+                    <dd>{getPhotoTypeLabel(getDraftPhotoType(selectedPhoto))}</dd>
+                  </div>
+                  <div>
+                    <dt>QR情報</dt>
+                    <dd>{isQrPhoto(selectedPhoto) ? "QR情報あり" : "QR情報なし"}</dd>
+                  </div>
+                </dl>
+              </section>
+            )}
+            {selectedPhoto && (
+              <details className="technical-detail-panel">
+                <summary>写真の詳細情報を表示</summary>
+                <dl className="detail-list">
+                  <div>
+                    <dt>original_filename</dt>
+                    <dd>{selectedPhoto.original_filename}</dd>
+                  </div>
+                  <div>
+                    <dt>original_path</dt>
+                    <dd>{selectedPhoto.original_path ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>file_hash</dt>
+                    <dd>{selectedPhoto.file_hash ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>mime_type</dt>
+                    <dd>{selectedPhoto.mime_type ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Code Type</dt>
+                    <dd>{selectedPhoto.code_type ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>Code Text</dt>
+                    <dd>{selectedPhoto.code_text ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>file_size</dt>
+                    <dd>{formatFileSize(selectedPhoto.file_size ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>imported_at</dt>
+                    <dd>{formatDateTime(selectedPhoto.imported_at ?? null)}</dd>
+                  </div>
+                  <div>
+                    <dt>review_status</dt>
+                    <dd>{selectedPhoto.review_status ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>export_status</dt>
+                    <dd>{selectedPhoto.export_status ?? "-"}</dd>
+                  </div>
+                </dl>
+              </details>
+            )}
           </div>
         ) : (
           <div className="empty-result">
@@ -1590,7 +1614,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
         </div>
         <form className="metadata-form">
           <section className="metadata-section">
-            <h3>患者写真セット情報</h3>
+            <h3>患者情報</h3>
             <label>
               患者ID
               <input
@@ -1665,16 +1689,17 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
             <p className="staff-load-message">{staffMessage}</p>
           </section>
           {reviewListStatus === "pending" && (
-            <section className="metadata-section">
+            <section className="metadata-section photo-organization-section">
               <h3>写真の整理</h3>
-              <p>別患者混入や写真の割り当て違いがある場合だけ使用します。</p>
-              <div className="group-edit-panel">
-                <div className="group-edit-header">
-                  <strong>選択中の写真を修正</strong>
-                  <span>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</span>
-                </div>
+              <div className="selected-photo-line">
+                <span>選択中の写真</span>
+                <strong>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</strong>
+              </div>
+              <div className="photo-organization-action">
+                <h4>この写真が別の患者のものだった場合</h4>
+                <p>別の患者の写真が混ざっていた場合に使います。</p>
                 <label>
-                  移動先患者写真セット
+                  移動先の患者
                   <select
                     value={moveTargetGroupId}
                     onChange={(event) => setMoveTargetGroupId(event.target.value)}
@@ -1687,22 +1712,26 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
                     ))}
                   </select>
                 </label>
-                <div className="group-edit-actions">
-                  <button
-                    type="button"
-                    onClick={handleMovePhoto}
-                    disabled={!selectedPhoto || !moveTargetGroupId || isBusy}
-                  >
-                    別の患者写真セットへ移動
-                  </button>
-                  <button type="button" onClick={handleSplitPhoto} disabled={!selectedPhoto || isBusy}>
-                    新しい患者写真セットへ分離
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleMovePhoto}
+                  disabled={!selectedPhoto || !moveTargetGroupId || isBusy}
+                >
+                  この写真を移動
+                </button>
               </div>
-              <div className="group-merge-panel">
+              <div className="photo-organization-action">
+                <h4>この写真だけ別に分けたい場合</h4>
+                <p>この写真を、現在の患者から分けたい場合に使います。</p>
+                <button type="button" onClick={handleSplitPhoto} disabled={!selectedPhoto || isBusy}>
+                  新しい患者として分ける
+                </button>
+              </div>
+              <div className="photo-organization-action subtle">
+                <h4>同じ患者の写真が分かれている場合</h4>
+                <p>同じ患者の写真が複数に分かれている場合に使います。</p>
                 <label>
-                  統合先患者写真セット
+                  まとめ先の患者
                   <select
                     value={mergeTargetGroupId}
                     onChange={(event) => setMergeTargetGroupId(event.target.value)}
@@ -1721,7 +1750,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
                   onClick={handleMergeGroup}
                   disabled={!selectedGroup || !mergeTargetGroupId || isBusy}
                 >
-                  他の患者写真セットと統合
+                  同じ患者の写真としてまとめる
                 </button>
               </div>
             </section>
@@ -1729,23 +1758,27 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
           {reviewListStatus === "pending" ? (
             <section className="metadata-section confirmation-section">
               <h3>確認操作</h3>
-              <div className="review-button-notes">
-                <p>一時保存: 入力内容や写真種別を保存します。まだ確認完了にはしません。</p>
-                <p>確認完了して書き出し待ちにする: 患者ID・撮影日・写真の混入がないことを確認し、書き出し待ちに進めます。</p>
+              <div className="confirmation-actions">
+                <div className="confirmation-action-card">
+                  <button className="secondary-action-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
+                    一時保存
+                  </button>
+                  <p>入力内容を保存します。確認完了にはしません。</p>
+                </div>
+                <div className="confirmation-action-card primary">
+                  <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
+                    <CheckCircle2 size={18} />
+                    確認完了
+                  </button>
+                  <p>写真と患者情報を確認済みにし、書き出し待ちにします。</p>
+                </div>
               </div>
-              <button className="secondary-action-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
-                一時保存
-              </button>
-              <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
-                <CheckCircle2 size={18} />
-                確認完了して書き出し待ちにする
-              </button>
             </section>
           ) : (
             <div className="return-review-panel">
-              <p>この患者写真セットを確認待ちに戻します。患者IDや担当医などを再編集できます。</p>
+              <p>この患者の写真を確認待ちに戻します。患者IDや担当医などを再編集できます。</p>
               {selectedGroup?.export_status === "exported" && (
-                <strong>この患者写真セットは書き出し済みのため、確認待ちには戻せません。</strong>
+                <strong>この患者は書き出し済みのため、確認待ちには戻せません。</strong>
               )}
               <button
                 className="secondary-action-button"
@@ -2218,7 +2251,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.8.6 Phase 7-D3</dd>
+            <dd>0.8.7 Phase 7-D4</dd>
           </div>
           <div>
             <dt>構成</dt>

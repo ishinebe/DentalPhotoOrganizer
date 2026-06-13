@@ -661,7 +661,25 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 7-D3 - 写真確認UI改善
+Current phase: Phase 7-D4 - 写真確認用語改善
+Phase7-D4 improves photo confirmation wording and selected-photo operations for non-developer users:
+
+* Review UI still keeps the internal patient photo set model, but screen wording now prefers `患者`, `この患者の写真`, and `患者ごとの写真`.
+* The confirmation button is shortened to `確認完了`; the write-out waiting explanation is shown outside the button.
+* `一時保存` is clearly described as saving inputs without completing confirmation.
+* The photo organization area explains actions around the selected single photo: move to another patient, separate as a new patient, or gather with the same patient.
+* Technical metadata such as `original_path`, `file_hash`, MIME type, code fields, timestamps, and status values is moved into a collapsible `写真の詳細情報` section.
+* `docs/glossary.md` documents that `患者写真セット` remains the internal term, while user-facing UI should prefer patient-centered wording.
+
+Real environment verification for Phase7-D4:
+
+1. Open Review and select a pending patient.
+2. Confirm the left list uses patient-centered wording such as `患者ごとの写真一覧`.
+3. Confirm the confirmation action buttons show `一時保存` and `確認完了` without button text wrapping.
+4. Confirm the button explanations are shown as small text outside the buttons.
+5. Select one photo and confirm the photo organization area explains move, separate, and gather actions for the selected photo.
+6. Confirm selected photo technical metadata is hidden under `写真の詳細情報` until expanded.
+7. Confirm temporary save, confirmation completion, photo move, split, and gather operations still work.
 
 Phase7-D3 improves the photo confirmation workflow UI for non-developer users:
 

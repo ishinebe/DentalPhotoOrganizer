@@ -1081,13 +1081,89 @@ h3 {
   line-height: 1.5;
 }
 
+.confirmation-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.confirmation-action-card {
+  display: grid;
+  gap: 6px;
+}
+
+.confirmation-action-card p {
+  margin: 0;
+  color: #667085;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .confirmation-section .secondary-action-button,
 .confirmation-section .approve-button {
   width: 100%;
+  justify-content: center;
+  white-space: nowrap;
 }
 
-.metadata-section .group-edit-actions {
-  grid-template-columns: 1fr;
+.confirmation-section .approve-button {
+  margin-top: 0;
+}
+
+.photo-organization-section {
+  gap: 10px;
+}
+
+.selected-photo-line {
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  border: 1px solid #e4ecf5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.selected-photo-line span {
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.selected-photo-line strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #12283f;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-organization-action {
+  display: grid;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid #e4ecf5;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.photo-organization-action.subtle {
+  background: #f8fbfe;
+}
+
+.photo-organization-action h4,
+.photo-organization-action p {
+  margin: 0;
+}
+
+.photo-organization-action h4 {
+  color: #12283f;
+  font-size: 0.86rem;
+}
+
+.photo-organization-action p {
+  color: #667085;
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 label {
@@ -1370,6 +1446,7 @@ textarea:focus {
 }
 
 .group-edit-actions button,
+.photo-organization-action button,
 .secondary-action-button {
   min-height: 38px;
   border: 1px solid #cbd8e5;
@@ -1380,6 +1457,7 @@ textarea:focus {
 }
 
 .group-edit-actions button:hover,
+.photo-organization-action button:hover,
 .secondary-action-button:hover {
   border-color: #2474c9;
   color: #1265b4;
@@ -1441,6 +1519,69 @@ textarea:focus {
   overflow-wrap: anywhere;
   color: #1d2939;
   font-size: 0.86rem;
+}
+
+.selected-photo-summary {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d9e3ef;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.selected-photo-summary h3 {
+  margin: 0;
+  color: #12283f;
+  font-size: 0.92rem;
+}
+
+.selected-photo-summary dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.selected-photo-summary dl div {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.selected-photo-summary dt {
+  color: #667085;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.selected-photo-summary dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: #12283f;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.technical-detail-panel {
+  overflow: hidden;
+  border: 1px solid #e4ecf5;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.technical-detail-panel summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: #24527a;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.technical-detail-panel .detail-list {
+  padding: 0 12px 12px;
 }
 
 .review-button-notes {
