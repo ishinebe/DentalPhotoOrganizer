@@ -661,7 +661,42 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 7-D2 - 撮影基準チェック
+Current phase: Phase 7-D3 - 写真確認UI改善
+
+Phase7-D3 improves the photo confirmation workflow UI for non-developer users:
+
+* The Review right column is grouped into `患者写真セット情報`, `写真の整理`, and `確認操作`.
+* The temporary save action is shown as `一時保存`.
+* The confirmation action is shown as `確認完了して書き出し待ちにする`.
+* `一時保存` saves entered metadata and photo type labels, but does not mark the set as confirmation-completed.
+* `確認完了して書き出し待ちにする` saves the current inputs and moves the patient photo set to the write-out waiting state.
+* The `撮影基準チェック` missing-photo display uses an advisory `要確認` tone rather than an error tone.
+* Missing standard photos remain advisory in this phase; they do not block confirmation completion.
+* The 9-view required photo types are now distinct from the 5-view required photo types.
+
+Temporary 9-view definition:
+
+* `front`
+* `right_buccal`
+* `left_buccal`
+* `upper_occlusal`
+* `lower_occlusal`
+* `upper_right_buccal`
+* `upper_left_buccal`
+* `lower_right_buccal`
+* `lower_left_buccal`
+
+The 9-view definition is provisional and may be adjusted later to match the clinic protocol.
+
+Real environment verification for Phase7-D3:
+
+1. Open Review and select a pending patient photo set.
+2. Confirm the right column is grouped into patient photo set information, photo organization, and confirmation actions.
+3. Confirm the buttons show `一時保存` and `確認完了して書き出し待ちにする`.
+4. Select `9枚法` and confirm the additional four temporary 9-view labels appear in the missing-photo check when absent.
+5. Confirm missing photos and unclassified photos are shown as advisory checks, not blocking errors.
+6. Confirm `一時保存` does not complete confirmation.
+7. Confirm `確認完了して書き出し待ちにする` still saves the current inputs and completes confirmation.
 
 Phase7-D2 switches the Review completeness check according to the selected shooting protocol:
 

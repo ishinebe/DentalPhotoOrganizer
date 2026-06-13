@@ -1,12 +1,16 @@
 export const photoTypeDefinitions = [
-  { value: "unclassified", label: "未分類", category: "system", displayOrder: 7, selectable: true },
+  { value: "unclassified", label: "未分類", category: "system", displayOrder: 11, selectable: true },
   { value: "qr", label: "QR", category: "control", displayOrder: 0, selectable: true },
   { value: "front", label: "正面観", category: "standard", displayOrder: 1, selectable: true },
   { value: "right_buccal", label: "右側方面観", category: "standard", displayOrder: 2, selectable: true },
   { value: "left_buccal", label: "左側方面観", category: "standard", displayOrder: 3, selectable: true },
   { value: "upper_occlusal", label: "上顎咬合面観", category: "standard", displayOrder: 4, selectable: true },
   { value: "lower_occlusal", label: "下顎咬合面観", category: "standard", displayOrder: 5, selectable: true },
-  { value: "other", label: "その他", category: "auxiliary", displayOrder: 6, selectable: true }
+  { value: "upper_right_buccal", label: "上顎右側臼歯部", category: "standard", displayOrder: 6, selectable: true },
+  { value: "upper_left_buccal", label: "上顎左側臼歯部", category: "standard", displayOrder: 7, selectable: true },
+  { value: "lower_right_buccal", label: "下顎右側臼歯部", category: "standard", displayOrder: 8, selectable: true },
+  { value: "lower_left_buccal", label: "下顎左側臼歯部", category: "standard", displayOrder: 9, selectable: true },
+  { value: "other", label: "その他", category: "auxiliary", displayOrder: 10, selectable: true }
 ] as const;
 
 export type PhotoTypeValue = (typeof photoTypeDefinitions)[number]["value"];
@@ -30,8 +34,11 @@ export const fiveViewRequiredPhotoTypes: PhotoTypeValue[] = [
 ];
 
 export const nineViewRequiredPhotoTypes: PhotoTypeValue[] = [
-  ...fiveViewRequiredPhotoTypes
-  // TODO: Add the additional four 9-view labels after the clinic protocol names are finalized.
+  ...fiveViewRequiredPhotoTypes,
+  "upper_right_buccal",
+  "upper_left_buccal",
+  "lower_right_buccal",
+  "lower_left_buccal"
 ];
 
 export type PhotoProtocolValue = "five_view" | "nine_view" | "fourteen_view" | "partial" | "other";

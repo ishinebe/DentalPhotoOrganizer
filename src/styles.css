@@ -968,10 +968,10 @@ h3 {
 
 .photo-type-check-section {
   padding: 10px;
-  border: 1px solid #fecaca;
+  border: 1px solid #fed7aa;
   border-radius: 8px;
-  color: #991b1b;
-  background: #fff7f7;
+  color: #9a3412;
+  background: #fff7ed;
 }
 
 .photo-type-check-section p,
@@ -988,6 +988,12 @@ h3 {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.photo-type-check-section > span {
+  color: #9a3412;
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .photo-type-check-section li,
@@ -1051,6 +1057,37 @@ h3 {
 .form-panel {
   display: grid;
   gap: 14px;
+}
+
+.metadata-section {
+  display: grid;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid #e4ecf5;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.metadata-section h3 {
+  margin: 0;
+  color: #12283f;
+  font-size: 0.95rem;
+}
+
+.metadata-section > p {
+  margin: 0;
+  color: #667085;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.confirmation-section .secondary-action-button,
+.confirmation-section .approve-button {
+  width: 100%;
+}
+
+.metadata-section .group-edit-actions {
+  grid-template-columns: 1fr;
 }
 
 label {

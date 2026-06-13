@@ -1,8 +1,8 @@
 {
   "name": "dental-photo-organizer",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "private": true,
-  "description": "DentalPhotoOrganizer Phase7-D2 protocol-based completeness check",
+  "description": "DentalPhotoOrganizer Phase7-D3 photo confirmation workflow UI",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {

@@ -61,12 +61,12 @@ type SupabaseStatus = "checking" | "success" | "failed" | "not-configured";
 type ReviewLoadStatus = "読み込み中" | "データなし" | "取得失敗" | "表示中" | "Supabase未設定";
 type ReviewActionStatus =
   | "待機中"
-  | "保存中"
-  | "保存成功"
-  | "保存失敗"
-  | "承認中"
-  | "承認成功"
-  | "承認失敗"
+  | "一時保存中"
+  | "一時保存成功"
+  | "一時保存失敗"
+  | "確認完了中"
+  | "確認完了成功"
+  | "確認完了失敗"
   | "差し戻し中"
   | "差し戻し成功"
   | "差し戻し失敗"
@@ -178,8 +178,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 7-D2</span>
-          <strong>撮影基準チェック</strong>
+          <span>Phase 7-D3</span>
+          <strong>写真確認UI改善</strong>
         </div>
       </aside>
 
@@ -603,7 +603,7 @@ function countExportPhotos(groups: ExportGroup[]) {
 
 function formatGroupOption(group: ReviewGroup) {
   const patientCandidate = getGroupPatientCandidate(group);
-  const label = patientCandidate ? `患者候補 ${patientCandidate}` : `撮影セット ${group.id.slice(0, 8)}`;
+  const label = patientCandidate ? `患者候補 ${patientCandidate}` : `患者写真セット ${group.id.slice(0, 8)}`;
   return `${label} / ${group.photo_count}枚`;
 }
 
@@ -617,7 +617,7 @@ function getReviewStatusLabel(status: ReviewGroup["review_status"]) {
   }
 
   if (status === "approved") {
-    return "レビュー完了";
+    return "確認完了";
   }
 
   if (status === "reviewing") {
@@ -773,7 +773,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     const targetStatus = statusOverride ?? reviewListStatus;
     setLoadStatus("読み込み中");
     setActionStatus("待機中");
-    setMessage(targetStatus === "pending" ? "確認待ちの撮影セットを読み込んでいます" : "確認済みの撮影セットを読み込んでいます");
+    setMessage(targetStatus === "pending" ? "確認待ちの患者写真セットを読み込んでいます" : "確認済みの患者写真セットを読み込んでいます");
 
     const result = await fetchReviewGroupsByStatus(targetStatus);
 
@@ -807,11 +807,11 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     setMessage(
       result.groups.length > 0
         ? targetStatus === "pending"
-          ? "確認待ちの撮影セットを表示しています"
-          : "確認済みの撮影セットを表示しています"
+          ? "確認待ちの患者写真セットを表示しています"
+          : "確認済みの患者写真セットを表示しています"
         : targetStatus === "pending"
-          ? "確認待ちの撮影セットはありません"
-          : "確認済みの撮影セットはありません"
+          ? "確認待ちの患者写真セットはありません"
+          : "確認済みの患者写真セットはありません"
     );
   }, [reviewListStatus]);
 
@@ -1080,19 +1080,19 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
       return;
     }
 
-    setActionStatus("保存中");
-    setMessage("レビュー内容を保存しています");
+    setActionStatus("一時保存中");
+    setMessage("一時保存しています");
 
     const result = await updateReviewGroupMetadata(selectedGroup.id, form, buildPhotoTypeUpdates());
 
     if (result.status !== "success" || !result.group) {
-      setActionStatus("保存失敗");
+      setActionStatus("一時保存失敗");
       setMessage(result.message);
       return;
     }
 
     setGroups((current) => current.map((group) => (group.id === result.group?.id ? result.group : group)));
-    setActionStatus("保存成功");
+    setActionStatus("一時保存成功");
     setMessage(result.message);
   };
 
@@ -1120,13 +1120,13 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
       }
     }
 
-    setActionStatus("承認中");
-    setMessage("入力内容を保存したうえで、撮影セットを確認済みにしています");
+    setActionStatus("確認完了中");
+    setMessage("入力内容を保存したうえで、患者写真セットを確認完了にしています");
 
     const result = await completeReviewGroup(selectedGroup.id, form, buildPhotoTypeUpdates());
 
     if (result.status !== "success") {
-      setActionStatus("承認失敗");
+      setActionStatus("確認完了失敗");
       setMessage(result.message);
       return;
     }
@@ -1137,7 +1137,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     setGroupPhotos([]);
     setSelectedPhotoId(null);
     setLoadStatus(remainingGroups.length > 0 ? "表示中" : "データなし");
-    setActionStatus("承認成功");
+    setActionStatus("確認完了成功");
     setMessage(result.message);
   };
 
@@ -1148,12 +1148,12 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
 
     if (selectedGroup.export_status === "exported") {
       setActionStatus("差し戻し失敗");
-      setMessage("この撮影セットは出力済みのため、確認待ちには戻せません");
+      setMessage("この患者写真セットは書き出し済みのため、確認待ちには戻せません");
       return;
     }
 
     const confirmed = window.confirm(
-      "この撮影セットを確認待ちに戻しますか？\nエクスポート前の撮影セットのみ対象です。"
+      "この患者写真セットを確認待ちに戻しますか？\n書き出し前の患者写真セットのみ対象です。"
     );
 
     if (!confirmed) {
@@ -1161,7 +1161,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     }
 
     setActionStatus("差し戻し中");
-    setMessage("撮影セットを確認待ちに戻しています");
+    setMessage("患者写真セットを確認待ちに戻しています");
 
     const result = await returnReviewGroupToPending(selectedGroup.id);
 
@@ -1188,7 +1188,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     }
 
     setActionStatus("移動中");
-    setMessage("写真を別の撮影セットへ移動しています");
+    setMessage("写真を別の患者写真セットへ移動しています");
 
     const result = await movePhotoToGroup(selectedPhoto.id, moveTargetGroupId);
 
@@ -1211,7 +1211,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     }
 
     setActionStatus("分離中");
-    setMessage("写真を新しい撮影セットへ分離しています");
+    setMessage("写真を新しい患者写真セットへ分離しています");
 
     const result = await splitPhotoToNewGroup(selectedPhoto.id);
 
@@ -1236,14 +1236,14 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     const targetGroup = groups.find((group) => group.id === mergeTargetGroupId);
     const targetLabel =
       targetGroup?.patient_id ?? targetGroup?.qr_patient_candidate ?? targetGroup?.id.slice(0, 8) ?? mergeTargetGroupId.slice(0, 8);
-    const confirmed = window.confirm(`選択中の撮影セットを ${targetLabel} に統合します。よろしいですか？`);
+    const confirmed = window.confirm(`選択中の患者写真セットを ${targetLabel} に統合します。よろしいですか？`);
 
     if (!confirmed) {
       return;
     }
 
     setActionStatus("統合中");
-    setMessage("撮影セットを統合しています");
+    setMessage("患者写真セットを統合しています");
 
     const result = await mergeGroups(selectedGroup.id, mergeTargetGroupId);
 
@@ -1262,7 +1262,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
 
   const handleRegroupByQrBoundaries = async () => {
     const confirmed = window.confirm(
-      "pending写真の撮影セット所属を整理し、検出済みQR情報を優先して撮影セットを再作成します。approved写真と元画像ファイルは変更しません。よろしいですか？"
+      "確認待ち写真の患者写真セット所属を整理し、検出済みQR情報を優先して患者写真セットを再作成します。確認完了済み写真と元画像ファイルは変更しません。よろしいですか？"
     );
 
     if (!confirmed) {
@@ -1270,7 +1270,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     }
 
     setActionStatus("セット再作成中");
-    setMessage("QR境界で撮影セットを再作成しています");
+    setMessage("QR境界で患者写真セットを再作成しています");
 
     const result = await regroupPendingPhotosByQrBoundaries();
 
@@ -1288,8 +1288,8 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
   };
 
   const isBusy =
-    actionStatus === "保存中" ||
-    actionStatus === "承認中" ||
+    actionStatus === "一時保存中" ||
+    actionStatus === "確認完了中" ||
     actionStatus === "差し戻し中" ||
     actionStatus === "移動中" ||
     actionStatus === "分離中" ||
@@ -1300,7 +1300,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
   return (
     <div className="review-page">
       <div className="review-guidance">
-        QRコード画像を境界として自動作成された撮影セットです。患者ID候補と写真のまとまりを確認してください。
+        QRコード画像を境界として自動作成された患者写真セットです。患者ID候補と写真のまとまりを確認してください。
       </div>
       <div className="review-mode-tabs" role="tablist" aria-label="確認状態の切り替え">
         <button
@@ -1323,7 +1323,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
       <div className="review-layout">
       <aside className="patient-column">
         <div className="column-title">
-          <h2>撮影セット一覧</h2>
+          <h2>患者写真セット一覧</h2>
           <span>{groups.length}件</span>
         </div>
         <div className={`review-status ${loadStatus === "取得失敗" ? "error" : ""}`}>
@@ -1336,7 +1336,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
         </button>
         {reviewListStatus === "pending" && (
           <button className="review-refresh-button" type="button" onClick={handleRegroupByQrBoundaries} disabled={isBusy}>
-            QR境界で撮影セット再作成
+            QR境界で患者写真セット再作成
           </button>
         )}
         <div className="patient-list review-photo-list">
@@ -1349,13 +1349,13 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
             >
               <div className="set-thumbnail">
                 {setThumbnailUrls[group.id] ? (
-                  <img src={setThumbnailUrls[group.id]} alt={group.representative_photo_filename ?? `撮影セット ${index + 1}`} />
+                  <img src={setThumbnailUrls[group.id]} alt={group.representative_photo_filename ?? `患者写真セット ${index + 1}`} />
                 ) : (
                   <ImageIcon size={22} />
                 )}
               </div>
               <div className="set-summary">
-                <strong>撮影セット {index + 1}</strong>
+                <strong>患者写真セット {index + 1}</strong>
                 <span>患者ID候補: {getGroupPatientCandidate(group) ?? "なし"}</span>
                 <span>
                   {group.photo_count}枚 / {group.has_qr_photo ? "QRあり" : "QRなし"}
@@ -1383,8 +1383,8 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
                 {loadStatus === "読み込み中"
                   ? "読み込み中"
                   : reviewListStatus === "pending"
-                    ? "確認待ち撮影セットはありません"
-                    : "確認済み撮影セットはありません"}
+                    ? "確認待ち患者写真セットはありません"
+                    : "確認済み患者写真セットはありません"}
               </span>
             </div>
           )}
@@ -1393,7 +1393,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
 
       <section className="thumbnail-column">
         <div className="column-title">
-          <h2>撮影セット内写真</h2>
+          <h2>患者写真セット内写真</h2>
           <span>{selectedGroup ? `${groupPhotos.length}枚` : "未選択"}</span>
         </div>
         {selectedGroup ? (
@@ -1401,7 +1401,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
             <section className={selectedGroup.needs_review_label ? "set-overview attention" : "set-overview"}>
               <div className="set-overview-header">
                 <div>
-                  <h3>撮影セット概要</h3>
+                  <h3>患者写真セット概要</h3>
                   <p>患者ID候補: {selectedPatientCandidate ?? "なし"}</p>
                 </div>
                 {selectedGroup.needs_review_label ? <strong>要確認</strong> : <strong className="clear">通常確認</strong>}
@@ -1434,7 +1434,8 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
                   </p>
                 ) : (
                   <div className="photo-type-check-section">
-                    <p>{selectedPhotoProtocol.label}で不足している写真</p>
+                    <p>{selectedPhotoProtocol.label}で確認が必要な写真</p>
+                    <span>不足している可能性があります</span>
                     <ul>
                       {photoTypeCheck.missingRequiredTypes.map((item) => (
                         <li key={item.value}>{item.label}</li>
@@ -1447,13 +1448,13 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
                     {photoTypeCheck.otherCount > 0 && (
                       <div>
                         <p>基本分類以外の写真があります</p>
-                        <span>その他 {photoTypeCheck.otherCount}枚</span>
+                        <span>要確認: その他 {photoTypeCheck.otherCount}枚</span>
                       </div>
                     )}
                     {photoTypeCheck.unclassifiedCount > 0 && (
                       <div>
                         <p>未分類の写真があります</p>
-                        <span>未分類 {photoTypeCheck.unclassifiedCount}枚</span>
+                        <span>要確認: 未分類 {photoTypeCheck.unclassifiedCount}枚</span>
                       </div>
                     )}
                   </div>
@@ -1527,44 +1528,10 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
               {groupPhotos.length === 0 && (
                 <div className="empty-result compact">
                   <ImageIcon size={24} />
-                  <span>この撮影セットには写真がありません</span>
+                  <span>この患者写真セットには写真がありません</span>
                 </div>
               )}
             </div>
-            {reviewListStatus === "pending" && (
-            <div className="group-edit-panel">
-              <div className="group-edit-header">
-                <strong>選択中の写真を修正</strong>
-                <span>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</span>
-              </div>
-              <label>
-                移動先撮影セット
-                <select
-                  value={moveTargetGroupId}
-                  onChange={(event) => setMoveTargetGroupId(event.target.value)}
-                  disabled={!selectedPhoto || otherGroups.length === 0 || isBusy}
-                >
-                  {otherGroups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {formatGroupOption(group)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="group-edit-actions">
-                <button
-                  type="button"
-                  onClick={handleMovePhoto}
-                  disabled={!selectedPhoto || !moveTargetGroupId || isBusy}
-                >
-                  別の撮影セットへ移動
-                </button>
-                <button type="button" onClick={handleSplitPhoto} disabled={!selectedPhoto || isBusy}>
-                  新しい撮影セットへ分離
-                </button>
-              </div>
-            </div>
-            )}
             <dl className="detail-list">
               <div>
                 <dt>original_filename</dt>
@@ -1618,127 +1585,167 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
 
       <aside className="metadata-column">
         <div className="column-title">
-          <h2>撮影セット情報</h2>
+          <h2>写真確認</h2>
           <span>{actionStatus}</span>
         </div>
         <form className="metadata-form">
-          <label>
-            患者ID
-            <input
-              value={form.patient_id}
-              onChange={(event) => updateFormValue("patient_id", event.target.value)}
-              disabled={!selectedGroup || isBusy || isApprovedMode}
-              placeholder="例: 0001"
-            />
-          </label>
-          <label>
-            撮影日
-            <input
-              type="date"
-              value={form.shooting_date}
-              onChange={(event) => updateFormValue("shooting_date", event.target.value)}
-              disabled={!selectedGroup || isBusy || isApprovedMode}
-            />
-          </label>
-          <label>
-            撮影方法
-            <select
-              value={form.photo_protocol}
-              onChange={(event) => updateFormValue("photo_protocol", event.target.value)}
-              disabled={!selectedGroup || isBusy || isApprovedMode}
-            >
-              {photoProtocolDefinitions.map((protocol) => (
-                <option key={protocol.value} value={protocol.value}>
-                  {protocol.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            担当医
-            <select
-              value={form.doctor_id}
-              onChange={(event) => updateFormValue("doctor_id", event.target.value)}
-              disabled={!selectedGroup || isBusy || isApprovedMode}
-            >
-              <option value="">選択してください</option>
-              {doctorOptions.map((staff) => (
-                <option key={staff.id} value={staff.id}>
-                  {staff.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            撮影者
-            <select
-              value={form.photographer_id}
-              onChange={(event) => updateFormValue("photographer_id", event.target.value)}
-              disabled={!selectedGroup || isBusy || isApprovedMode}
-            >
-              <option value="">選択してください</option>
-              {photographerOptions.map((staff) => (
-                <option key={staff.id} value={staff.id}>
-                  {staff.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            メモ
-            <textarea
-              value={form.notes}
-              onChange={(event) => updateFormValue("notes", event.target.value)}
-              disabled={!selectedGroup || isBusy || isApprovedMode}
-              placeholder="確認内容や申し送りを入力"
-            />
-          </label>
-          <p className="staff-load-message">{staffMessage}</p>
-          <div className="review-button-notes">
-            <p>レビュー内容を保存: 入力内容だけを保存します。確認完了にはなりません。</p>
-            <p>問題なしで確定: 入力内容を保存したうえで、この撮影セットを確認済みにします。</p>
-          </div>
-          {reviewListStatus === "pending" && (
-          <div className="group-merge-panel">
+          <section className="metadata-section">
+            <h3>患者写真セット情報</h3>
             <label>
-              統合先撮影セット
+              患者ID
+              <input
+                value={form.patient_id}
+                onChange={(event) => updateFormValue("patient_id", event.target.value)}
+                disabled={!selectedGroup || isBusy || isApprovedMode}
+                placeholder="例: 0001"
+              />
+            </label>
+            <label>
+              撮影日
+              <input
+                type="date"
+                value={form.shooting_date}
+                onChange={(event) => updateFormValue("shooting_date", event.target.value)}
+                disabled={!selectedGroup || isBusy || isApprovedMode}
+              />
+            </label>
+            <label>
+              撮影方法
               <select
-                value={mergeTargetGroupId}
-                onChange={(event) => setMergeTargetGroupId(event.target.value)}
-                disabled={!selectedGroup || otherGroups.length === 0 || isBusy}
+                value={form.photo_protocol}
+                onChange={(event) => updateFormValue("photo_protocol", event.target.value)}
+                disabled={!selectedGroup || isBusy || isApprovedMode}
               >
-                {otherGroups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {formatGroupOption(group)}
+                {photoProtocolDefinitions.map((protocol) => (
+                  <option key={protocol.value} value={protocol.value}>
+                    {protocol.label}
                   </option>
                 ))}
               </select>
             </label>
-            <button
-              className="secondary-action-button"
-              type="button"
-              onClick={handleMergeGroup}
-              disabled={!selectedGroup || !mergeTargetGroupId || isBusy}
-            >
-              他の撮影セットと統合
-            </button>
-          </div>
+            <label>
+              担当医
+              <select
+                value={form.doctor_id}
+                onChange={(event) => updateFormValue("doctor_id", event.target.value)}
+                disabled={!selectedGroup || isBusy || isApprovedMode}
+              >
+                <option value="">選択してください</option>
+                {doctorOptions.map((staff) => (
+                  <option key={staff.id} value={staff.id}>
+                    {staff.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              撮影者
+              <select
+                value={form.photographer_id}
+                onChange={(event) => updateFormValue("photographer_id", event.target.value)}
+                disabled={!selectedGroup || isBusy || isApprovedMode}
+              >
+                <option value="">選択してください</option>
+                {photographerOptions.map((staff) => (
+                  <option key={staff.id} value={staff.id}>
+                    {staff.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              メモ
+              <textarea
+                value={form.notes}
+                onChange={(event) => updateFormValue("notes", event.target.value)}
+                disabled={!selectedGroup || isBusy || isApprovedMode}
+                placeholder="確認内容や申し送りを入力"
+              />
+            </label>
+            <p className="staff-load-message">{staffMessage}</p>
+          </section>
+          {reviewListStatus === "pending" && (
+            <section className="metadata-section">
+              <h3>写真の整理</h3>
+              <p>別患者混入や写真の割り当て違いがある場合だけ使用します。</p>
+              <div className="group-edit-panel">
+                <div className="group-edit-header">
+                  <strong>選択中の写真を修正</strong>
+                  <span>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</span>
+                </div>
+                <label>
+                  移動先患者写真セット
+                  <select
+                    value={moveTargetGroupId}
+                    onChange={(event) => setMoveTargetGroupId(event.target.value)}
+                    disabled={!selectedPhoto || otherGroups.length === 0 || isBusy}
+                  >
+                    {otherGroups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {formatGroupOption(group)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="group-edit-actions">
+                  <button
+                    type="button"
+                    onClick={handleMovePhoto}
+                    disabled={!selectedPhoto || !moveTargetGroupId || isBusy}
+                  >
+                    別の患者写真セットへ移動
+                  </button>
+                  <button type="button" onClick={handleSplitPhoto} disabled={!selectedPhoto || isBusy}>
+                    新しい患者写真セットへ分離
+                  </button>
+                </div>
+              </div>
+              <div className="group-merge-panel">
+                <label>
+                  統合先患者写真セット
+                  <select
+                    value={mergeTargetGroupId}
+                    onChange={(event) => setMergeTargetGroupId(event.target.value)}
+                    disabled={!selectedGroup || otherGroups.length === 0 || isBusy}
+                  >
+                    {otherGroups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {formatGroupOption(group)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="secondary-action-button"
+                  type="button"
+                  onClick={handleMergeGroup}
+                  disabled={!selectedGroup || !mergeTargetGroupId || isBusy}
+                >
+                  他の患者写真セットと統合
+                </button>
+              </div>
+            </section>
           )}
           {reviewListStatus === "pending" ? (
-            <>
-              <button className="primary-button approve-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
-                レビュー内容を保存
+            <section className="metadata-section confirmation-section">
+              <h3>確認操作</h3>
+              <div className="review-button-notes">
+                <p>一時保存: 入力内容や写真種別を保存します。まだ確認完了にはしません。</p>
+                <p>確認完了して書き出し待ちにする: 患者ID・撮影日・写真の混入がないことを確認し、書き出し待ちに進めます。</p>
+              </div>
+              <button className="secondary-action-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
+                一時保存
               </button>
               <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
                 <CheckCircle2 size={18} />
-                問題なしで確定
+                確認完了して書き出し待ちにする
               </button>
-            </>
+            </section>
           ) : (
             <div className="return-review-panel">
-              <p>この撮影セットを確認待ちに戻します。患者IDや担当医などを再編集できます。</p>
+              <p>この患者写真セットを確認待ちに戻します。患者IDや担当医などを再編集できます。</p>
               {selectedGroup?.export_status === "exported" && (
-                <strong>この撮影セットは出力済みのため、確認待ちには戻せません。</strong>
+                <strong>この患者写真セットは書き出し済みのため、確認待ちには戻せません。</strong>
               )}
               <button
                 className="secondary-action-button"
@@ -2211,7 +2218,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.8.5 Phase 7-D2</dd>
+            <dd>0.8.6 Phase 7-D3</dd>
           </div>
           <div>
             <dt>構成</dt>
