@@ -88,7 +88,7 @@ export function getPhotoTypeOrder(value: string | null | undefined) {
 }
 
 export function getRequiredPhotoTypesForProtocol(protocol: PhotoProtocolValue = "five_view") {
-  return photoProtocolDefinitions.find((definition) => definition.value === protocol)?.requiredPhotoTypes ?? fiveViewRequiredPhotoTypes;
+  return getRequiredPhotoTypes(protocol);
 }
 
 export function isPhotoProtocolValue(value: string | null | undefined): value is PhotoProtocolValue {
@@ -96,6 +96,14 @@ export function isPhotoProtocolValue(value: string | null | undefined): value is
 }
 
 export function getPhotoProtocolLabel(value: string | null | undefined) {
+  return getPhotoProtocolDefinition(value).label;
+}
+
+export function getPhotoProtocolDefinition(value: string | null | undefined) {
   const normalized = isPhotoProtocolValue(value) ? value : defaultPhotoProtocol.value;
-  return photoProtocolDefinitions.find((definition) => definition.value === normalized)?.label ?? defaultPhotoProtocol.label;
+  return photoProtocolDefinitions.find((definition) => definition.value === normalized) ?? defaultPhotoProtocol;
+}
+
+export function getRequiredPhotoTypes(value: string | null | undefined) {
+  return getPhotoProtocolDefinition(value).requiredPhotoTypes;
 }

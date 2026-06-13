@@ -661,7 +661,31 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 7-D1 - 撮影方法選択
+Current phase: Phase 7-D2 - 撮影基準チェック
+
+Phase7-D2 switches the Review completeness check according to the selected shooting protocol:
+
+* `five_view` uses the five-view required photo types from `src/lib/photoTypes.ts`.
+* `nine_view` uses the nine-view required photo type definition from `src/lib/photoTypes.ts`.
+* `fourteen_view` is selectable and saved, but its detailed completeness check is planned for a later phase.
+* `partial` and `other` do not run missing-photo checks.
+* Review shows only missing required photo types instead of listing every required type.
+* If all required photos are present, Review shows a completion message for the selected shooting protocol.
+* Photos marked `other` are shown as a caution: `基本分類以外の写真があります`.
+* Empty, unknown, or `unclassified` photo types are shown as a caution: `未分類の写真があります`.
+* Changing the `撮影方法` dropdown updates the `撮影基準チェック` immediately before saving.
+* Missing required photos remain advisory in this phase; they do not block `問題なしで確定`.
+
+Real environment verification for Phase7-D2:
+
+1. Open Review and select a pending patient photo set.
+2. Change `撮影方法` between `five_view`, `nine_view`, `fourteen_view`, `partial`, and `other`.
+3. Confirm the `撮影基準チェック` message changes immediately without saving.
+4. Set photo types so required photos are complete and confirm the completion message appears.
+5. Remove or leave missing required photo types and confirm only missing labels are listed.
+6. Set one photo to `other` and confirm the caution appears.
+7. Leave one photo `unclassified` and confirm the caution appears.
+8. Confirm `レビュー内容を保存` and `問題なしで確定` still work and are not blocked by the advisory check.
 
 Phase7-D1 adds shooting protocol selection per shooting set:
 

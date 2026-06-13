@@ -942,6 +942,74 @@ h3 {
   font-style: normal;
 }
 
+.photo-type-check-message {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid #d9e3ef;
+  border-radius: 8px;
+  color: #344054;
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.photo-type-check-message.complete {
+  border-color: #bbf7d0;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.photo-type-check-section,
+.photo-type-check-cautions {
+  display: grid;
+  gap: 7px;
+}
+
+.photo-type-check-section {
+  padding: 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #991b1b;
+  background: #fff7f7;
+}
+
+.photo-type-check-section p,
+.photo-type-check-cautions p {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.photo-type-check-section ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photo-type-check-section li,
+.photo-type-check-cautions span {
+  width: fit-content;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.photo-type-check-cautions > div {
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #9a3412;
+  background: #fff7ed;
+}
+
 .thumbnail-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(130px, 1fr));

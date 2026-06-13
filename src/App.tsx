@@ -19,11 +19,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
 import {
   defaultPhotoProtocol,
+  getPhotoProtocolDefinition,
   getPhotoProtocolLabel,
   getPhotoTypeLabel,
   getPhotoTypeOrder,
-  getRequiredPhotoTypesForProtocol,
   isPhotoProtocolValue,
+  isPhotoTypeValue,
   photoProtocolDefinitions,
   photoTypeOptions,
   type PhotoTypeValue
@@ -177,8 +178,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 7-D1</span>
-          <strong>撮影方法選択</strong>
+          <span>Phase 7-D2</span>
+          <strong>撮影基準チェック</strong>
         </div>
       </aside>
 
@@ -648,7 +649,7 @@ function getInitialPhotoType(
     | Pick<ExportGroupPhoto, "photo_type" | "original_filename" | "code_type" | "code_text">
 ) {
   const detectedQr = hasDetectedQrCode(photo) || isQrFilename(photo.original_filename);
-  return photo.photo_type ?? (detectedQr ? "qr" : "unclassified");
+  return isPhotoTypeValue(photo.photo_type) ? photo.photo_type : detectedQr ? "qr" : "unclassified";
 }
 
 function sortPhotosForDisplay<T extends { original_filename: string; sort_order?: number | null }>(
@@ -733,22 +734,26 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     () => sortPhotosForDisplay(groupPhotos, (photo) => photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo)),
     [groupPhotos, photoTypeDrafts]
   );
-  const requiredPhotoTypes = useMemo(
-    () =>
-      getRequiredPhotoTypesForProtocol(isPhotoProtocolValue(form.photo_protocol) ? form.photo_protocol : defaultPhotoProtocol.value).map((value) => ({
-        value,
-        label: getPhotoTypeLabel(value)
-      })),
-    [form.photo_protocol]
-  );
-  const photoTypeCompleteness = useMemo(
-    () =>
-      requiredPhotoTypes.map((standardType) => ({
-        ...standardType,
-        present: groupPhotos.some((photo) => (photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo)) === standardType.value)
-      })),
-    [groupPhotos, photoTypeDrafts, requiredPhotoTypes]
-  );
+  const selectedPhotoProtocol = useMemo(() => getPhotoProtocolDefinition(form.photo_protocol), [form.photo_protocol]);
+  const photoTypeCheck = useMemo(() => {
+    const counts = new Map<PhotoTypeValue, number>();
+
+    for (const photo of groupPhotos) {
+      const photoType = photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo);
+      counts.set(photoType, (counts.get(photoType) ?? 0) + 1);
+    }
+
+    return {
+      missingRequiredTypes: selectedPhotoProtocol.requiredPhotoTypes
+        .filter((photoType) => (counts.get(photoType) ?? 0) === 0)
+        .map((photoType) => ({
+          value: photoType,
+          label: getPhotoTypeLabel(photoType)
+        })),
+      otherCount: counts.get("other") ?? 0,
+      unclassifiedCount: counts.get("unclassified") ?? 0
+    };
+  }, [groupPhotos, photoTypeDrafts, selectedPhotoProtocol]);
   const selectedPhoto = groupPhotos.find((photo) => photo.id === selectedPhotoId) ?? sortedGroupPhotos[0] ?? null;
   const selectedPatientCandidate = getGroupPatientCandidate(selectedGroup);
   const selectedAttentionReasons = getAttentionReasonText(selectedGroup);
@@ -1416,15 +1421,43 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
                 </div>
               </dl>
               <div className="photo-type-check-panel">
-                <strong>撮影種別チェック</strong>
-                <div className="photo-type-check-list">
-                  {photoTypeCompleteness.map((item) => (
-                    <span className={item.present ? "complete" : "missing"} key={item.value}>
-                      <em>{item.present ? "✓" : "不足"}</em>
-                      {item.label}
-                    </span>
-                  ))}
-                </div>
+                <strong>撮影基準チェック</strong>
+                {selectedPhotoProtocol.value === "fourteen_view" ? (
+                  <p className="photo-type-check-message">14枚法の詳細チェックは今後対応予定です。撮影方法は保存されています。</p>
+                ) : selectedPhotoProtocol.value === "partial" ? (
+                  <p className="photo-type-check-message">部分撮影として確認します。不足判定は行いません。</p>
+                ) : selectedPhotoProtocol.value === "other" ? (
+                  <p className="photo-type-check-message">その他の撮影方法として確認します。不足判定は行いません。</p>
+                ) : photoTypeCheck.missingRequiredTypes.length === 0 ? (
+                  <p className="photo-type-check-message complete">
+                    {selectedPhotoProtocol.label}の基本写真が揃っています
+                  </p>
+                ) : (
+                  <div className="photo-type-check-section">
+                    <p>{selectedPhotoProtocol.label}で不足している写真</p>
+                    <ul>
+                      {photoTypeCheck.missingRequiredTypes.map((item) => (
+                        <li key={item.value}>{item.label}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(photoTypeCheck.otherCount > 0 || photoTypeCheck.unclassifiedCount > 0) && (
+                  <div className="photo-type-check-cautions">
+                    {photoTypeCheck.otherCount > 0 && (
+                      <div>
+                        <p>基本分類以外の写真があります</p>
+                        <span>その他 {photoTypeCheck.otherCount}枚</span>
+                      </div>
+                    )}
+                    {photoTypeCheck.unclassifiedCount > 0 && (
+                      <div>
+                        <p>未分類の写真があります</p>
+                        <span>未分類 {photoTypeCheck.unclassifiedCount}枚</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
             <div className={`preview-frame ${previewStatus === "表示中" ? "ready" : ""}`}>
@@ -2178,7 +2211,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.8.4 Phase 7-D1</dd>
+            <dd>0.8.5 Phase 7-D2</dd>
           </div>
           <div>
             <dt>構成</dt>
