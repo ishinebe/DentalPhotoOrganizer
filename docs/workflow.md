@@ -116,6 +116,26 @@ Important rules:
 - Export should make success and failure states obvious.
 - Export should leave enough information for later verification.
 
+## Post-export Correction and Additional Export
+
+An exported photo set may still require later correction or addition.
+
+Examples:
+
+- A photograph initially excluded from export becomes necessary later.
+- A photograph is reclassified after export.
+- A photograph is moved back to a patient after export.
+- A patient folder needs an additional photograph after the first export.
+
+Important rules:
+
+- Exported should mean exported at least once, not permanently locked.
+- Users should be able to re-check exported patients in future workflows.
+- Additional export must avoid destructive changes to existing exported folders.
+- Existing exported files should not be deleted or overwritten silently.
+- A future per-photo export target flag may allow users to include or exclude individual photographs from export.
+- Photographs excluded from export should remain available for later inclusion.
+
 ## Error and Uncertainty Handling
 
 When the system is uncertain:
@@ -144,3 +164,4 @@ The workflow implies the following design requirements:
 - Patient ID, date, attending doctor, and operator should be searchable.
 - The application should avoid unnecessary steps during repetitive review work.
 - The system should support overnight automated processing followed by morning human review.
+- Exported patients should remain available for later review, correction, or additional export workflows.
