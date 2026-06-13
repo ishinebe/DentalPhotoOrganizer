@@ -1074,14 +1074,15 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
       return;
     }
 
-    const remainingGroups = groups.filter((group) => group.id !== selectedGroup.id);
-    setGroups(remainingGroups);
-    setSelectedGroupId(remainingGroups[0]?.id ?? null);
+    const returnedGroupId = result.group?.id ?? selectedGroup.id;
+    setReviewListStatus("pending");
+    setGroups([]);
+    setSelectedGroupId(null);
     setGroupPhotos([]);
     setSelectedPhotoId(null);
-    setLoadStatus(remainingGroups.length > 0 ? "表示中" : "データなし");
     setActionStatus("差し戻し成功");
-    setMessage("確認待ちに戻しました。確認待ちタブで再編集できます");
+    setMessage("確認待ちに戻しました。確認待ち一覧を再読み込みしています");
+    await loadGroups(returnedGroupId, "pending");
   };
 
   const handleMovePhoto = async () => {
