@@ -1,8 +1,8 @@
 {
   "name": "dental-photo-organizer",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "private": true,
-  "description": "DentalPhotoOrganizer Phase6-B review confirmation workflow",
+  "description": "DentalPhotoOrganizer Phase7-A photo type labeling",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {

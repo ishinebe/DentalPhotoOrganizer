@@ -42,6 +42,9 @@ export type ReviewGroupPhoto = {
   reviewed_at: string | null;
   approved_at: string | null;
   notes: string | null;
+  photo_type: string | null;
+  photo_type_confidence: number | null;
+  photo_type_source: string | null;
   sort_order: number | null;
 };
 
@@ -79,6 +82,11 @@ export type ReviewGroupEditResult = {
 
 export type ReviewGroupListStatus = "pending" | "approved";
 
+export type PhotoTypeUpdate = {
+  photoId: string;
+  photoType: string | null;
+};
+
 const groupColumns = [
   "id",
   "import_batch_id",
@@ -111,7 +119,10 @@ const photoColumns = [
   "export_status",
   "reviewed_at",
   "approved_at",
-  "notes"
+  "notes",
+  "photo_type",
+  "photo_type_confidence",
+  "photo_type_source"
 ].join(",");
 
 type GroupRow = Omit<
@@ -299,7 +310,8 @@ export async function fetchReviewGroupPhotos(groupId: string): Promise<ReviewGro
 
 export async function updateReviewGroupMetadata(
   groupId: string,
-  form: ReviewGroupForm
+  form: ReviewGroupForm,
+  photoTypes: PhotoTypeUpdate[] = []
 ): Promise<ReviewGroupMutationResult> {
   if (!hasSupabaseConfig || !supabase) {
     return {
@@ -360,6 +372,15 @@ export async function updateReviewGroupMetadata(
     }
   }
 
+  const photoTypeResult = await updateReviewGroupPhotoTypes(photoTypes);
+  if (photoTypeResult.status === "error") {
+    return {
+      status: "error",
+      group: null,
+      message: photoTypeResult.message
+    };
+  }
+
   const displaySummaries = await fetchGroupDisplaySummaries(
     photoIds.ids.map((photoId, index) => ({
       photo_id: photoId,
@@ -395,7 +416,11 @@ export async function updateReviewGroupMetadata(
   };
 }
 
-export async function completeReviewGroup(groupId: string, form?: ReviewGroupForm): Promise<ReviewGroupMutationResult> {
+export async function completeReviewGroup(
+  groupId: string,
+  form?: ReviewGroupForm,
+  photoTypes: PhotoTypeUpdate[] = []
+): Promise<ReviewGroupMutationResult> {
   if (!hasSupabaseConfig || !supabase) {
     return {
       status: "not-configured",
@@ -405,10 +430,19 @@ export async function completeReviewGroup(groupId: string, form?: ReviewGroupFor
   }
 
   if (form) {
-    const saveResult = await updateReviewGroupMetadata(groupId, form);
+    const saveResult = await updateReviewGroupMetadata(groupId, form, photoTypes);
 
     if (saveResult.status !== "success") {
       return saveResult;
+    }
+  } else if (photoTypes.length > 0) {
+    const photoTypeResult = await updateReviewGroupPhotoTypes(photoTypes);
+    if (photoTypeResult.status === "error") {
+      return {
+        status: "error",
+        group: null,
+        message: photoTypeResult.message
+      };
     }
   }
 
@@ -596,6 +630,38 @@ export async function returnReviewGroupToPending(groupId: string): Promise<Revie
       representative_photo_filename: displaySummary?.representativePhotoFilename ?? null
     },
     message: "確認待ちに戻しました"
+  };
+}
+
+async function updateReviewGroupPhotoTypes(photoTypes: PhotoTypeUpdate[]) {
+  if (!supabase || photoTypes.length === 0) {
+    return {
+      status: "success" as const,
+      message: "写真種別の更新対象はありません"
+    };
+  }
+
+  for (const item of photoTypes) {
+    const { error } = await supabase
+      .from("photos")
+      .update({
+        photo_type: item.photoType,
+        photo_type_source: item.photoType ? "manual" : null,
+        photo_type_confidence: null
+      })
+      .eq("id", item.photoId);
+
+    if (error) {
+      return {
+        status: "error" as const,
+        message: error.message
+      };
+    }
+  }
+
+  return {
+    status: "success" as const,
+    message: "写真種別を保存しました"
   };
 }
 

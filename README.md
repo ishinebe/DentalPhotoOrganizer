@@ -661,7 +661,47 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 6-B - 確認済みセット再編集
+Current phase: Phase 7-A - 撮影種別ラベル
+
+Phase7-A adds manual photo type labeling to the Review workflow:
+
+* Review shows a photo type dropdown for each photo in the selected shooting set.
+* The selected photo preview also shows the same photo type dropdown, synchronized with the thumbnail list.
+* `レビュー内容を保存` saves patient metadata and photo type labels together.
+* `問題なしで確定` also saves the latest patient metadata and photo type labels before approving the shooting set.
+* Export preview shows saved photo type labels on thumbnails for final pre-export checking.
+
+Apply `supabase/phase7_photo_type.sql` before using Phase7-A photo type persistence. In the Supabase SQL Editor UI, open `supabase/phase7_photo_type.sql`, paste the contents, and run it. The migration adds:
+
+* `photos.photo_type`
+* `photos.photo_type_confidence`
+* `photos.photo_type_source`
+
+Photo type save values:
+
+| value | label |
+|---|---|
+| `unclassified` | 未分類 |
+| `qr` | QR |
+| `front` | 正面観 |
+| `upper_occlusal` | 上顎咬合面観 |
+| `lower_occlusal` | 下顎咬合面観 |
+| `right_buccal` | 右側方面観 |
+| `left_buccal` | 左側方面観 |
+| `other` | その他 |
+
+Manual edits save `photo_type_source = manual` and leave `photo_type_confidence = null`.
+
+Real environment verification for Phase7-A:
+
+1. Apply `supabase/phase7_photo_type.sql`.
+2. Open Review and select a pending shooting set.
+3. Change photo type labels in the thumbnail list and selected photo preview.
+4. Click `レビュー内容を保存`.
+5. Confirm `photos.photo_type` and `photos.photo_type_source = manual` in Supabase.
+6. Change labels again and click `問題なしで確定`.
+7. Confirm the latest labels are saved while the shooting set becomes `approved`.
+8. Open Export and confirm thumbnails display the saved photo type labels.
 
 Phase6-B makes the Review confirmation workflow safer:
 

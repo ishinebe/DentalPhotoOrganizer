@@ -37,6 +37,7 @@ import {
   type ReviewGroupForm,
   type ReviewGroupListStatus,
   type ReviewGroupPhoto,
+  type PhotoTypeUpdate,
   updateReviewGroupMetadata
 } from "./lib/reviewGroups";
 import { fetchStaffMembers, type StaffMember } from "./lib/staff";
@@ -120,6 +121,19 @@ const emptyReviewForm: ReviewGroupForm = {
   notes: ""
 };
 
+const photoTypeOptions = [
+  { value: "unclassified", label: "未分類" },
+  { value: "qr", label: "QR" },
+  { value: "front", label: "正面観" },
+  { value: "upper_occlusal", label: "上顎咬合面観" },
+  { value: "lower_occlusal", label: "下顎咬合面観" },
+  { value: "right_buccal", label: "右側方面観" },
+  { value: "left_buccal", label: "左側方面観" },
+  { value: "other", label: "その他" }
+] as const;
+
+type PhotoTypeValue = (typeof photoTypeOptions)[number]["value"];
+
 type ReviewOpenTarget = {
   groupId: string;
   status: ReviewGroupListStatus;
@@ -164,8 +178,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 6-B</span>
-          <strong>確認済みセット再編集</strong>
+          <span>Phase 7-A</span>
+          <strong>撮影種別ラベル</strong>
         </div>
       </aside>
 
@@ -617,8 +631,21 @@ function getAttentionReasonText(group: ReviewGroup | null) {
   return group?.attention_reasons.length ? group.attention_reasons.join(" / ") : "なし";
 }
 
+function isQrFilename(filename: string | null | undefined) {
+  return Boolean(filename?.toLowerCase().includes("qr"));
+}
+
 function isQrPhoto(photo: ReviewGroupPhoto | null) {
-  return Boolean(photo?.original_filename.toLowerCase().includes("qr"));
+  return isQrFilename(photo?.original_filename);
+}
+
+function getInitialPhotoType(photo: Pick<ReviewGroupPhoto, "photo_type" | "original_filename"> | Pick<ExportGroupPhoto, "photo_type" | "original_filename">) {
+  return photo.photo_type ?? (isQrFilename(photo.original_filename) ? "qr" : "unclassified");
+}
+
+function getPhotoTypeLabel(value: string | null | undefined) {
+  const normalized = value && photoTypeOptions.some((option) => option.value === value) ? value : "unclassified";
+  return photoTypeOptions.find((option) => option.value === normalized)?.label ?? "未分類";
 }
 
 function roleMatches(staff: StaffMember, keywords: string[]) {
@@ -673,6 +700,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [setThumbnailUrls, setSetThumbnailUrls] = useState<Record<string, string>>({});
   const [photoThumbnailUrls, setPhotoThumbnailUrls] = useState<Record<string, string>>({});
+  const [photoTypeDrafts, setPhotoTypeDrafts] = useState<Record<string, PhotoTypeValue>>({});
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [staffMessage, setStaffMessage] = useState("スタッフ一覧を読み込んでいます");
   const [moveTargetGroupId, setMoveTargetGroupId] = useState("");
@@ -901,6 +929,27 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
   }, [selectedGroup]);
 
   useEffect(() => {
+    setPhotoTypeDrafts(
+      Object.fromEntries(groupPhotos.map((photo) => [photo.id, getInitialPhotoType(photo)])) as Record<string, PhotoTypeValue>
+    );
+  }, [groupPhotos]);
+
+  const getDraftPhotoType = (photo: ReviewGroupPhoto) => photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo);
+
+  const updatePhotoTypeDraft = (photoId: string, value: string) => {
+    setPhotoTypeDrafts((current) => ({
+      ...current,
+      [photoId]: value as PhotoTypeValue
+    }));
+  };
+
+  const buildPhotoTypeUpdates = (): PhotoTypeUpdate[] =>
+    groupPhotos.map((photo) => ({
+      photoId: photo.id,
+      photoType: getDraftPhotoType(photo)
+    }));
+
+  useEffect(() => {
     const nextTargetGroupId = otherGroups[0]?.id ?? "";
     setMoveTargetGroupId((current) => (current && otherGroups.some((group) => group.id === current) ? current : nextTargetGroupId));
     setMergeTargetGroupId((current) => (current && otherGroups.some((group) => group.id === current) ? current : nextTargetGroupId));
@@ -986,7 +1035,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     setActionStatus("保存中");
     setMessage("レビュー内容を保存しています");
 
-    const result = await updateReviewGroupMetadata(selectedGroup.id, form);
+    const result = await updateReviewGroupMetadata(selectedGroup.id, form, buildPhotoTypeUpdates());
 
     if (result.status !== "success" || !result.group) {
       setActionStatus("保存失敗");
@@ -1026,7 +1075,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     setActionStatus("承認中");
     setMessage("入力内容を保存したうえで、撮影セットを確認済みにしています");
 
-    const result = await completeReviewGroup(selectedGroup.id, form);
+    const result = await completeReviewGroup(selectedGroup.id, form, buildPhotoTypeUpdates());
 
     if (result.status !== "success") {
       setActionStatus("承認失敗");
@@ -1337,14 +1386,30 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
               )}
             </div>
 
+            {selectedPhoto && (
+              <label className="selected-photo-type-control">
+                撮影種別
+                <select
+                  value={getDraftPhotoType(selectedPhoto)}
+                  onChange={(event) => updatePhotoTypeDraft(selectedPhoto.id, event.target.value)}
+                  disabled={isBusy || isApprovedMode}
+                >
+                  {photoTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <div className="group-photo-grid">
-              {groupPhotos.map((photo, index) => (
-                <button
+              {groupPhotos.map((photo) => (
+                <article
                   key={photo.id}
                   className={selectedPhoto?.id === photo.id ? "group-photo-card active" : "group-photo-card"}
-                  type="button"
-                  onClick={() => setSelectedPhotoId(photo.id)}
                 >
+                  <button className="group-photo-select-button" type="button" onClick={() => setSelectedPhotoId(photo.id)}>
                   <span className="group-photo-thumb">
                     {photoThumbnailUrls[photo.id] ? (
                       <img src={photoThumbnailUrls[photo.id]} alt={photo.original_filename} />
@@ -1353,9 +1418,24 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
                     )}
                     {isQrPhoto(photo) && <em>QR</em>}
                   </span>
-                  <strong>{getPhotoSlotLabel(index)}</strong>
+                  <strong>{getPhotoTypeLabel(getDraftPhotoType(photo))}</strong>
                   <span>{photo.original_filename}</span>
-                </button>
+                  </button>
+                  <label className="photo-type-select">
+                    撮影種別
+                    <select
+                      value={getDraftPhotoType(photo)}
+                      onChange={(event) => updatePhotoTypeDraft(photo.id, event.target.value)}
+                      disabled={isBusy || isApprovedMode}
+                    >
+                      {photoTypeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </article>
               ))}
               {groupPhotos.length === 0 && (
                 <div className="empty-result compact">
@@ -1864,7 +1944,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
               </button>
             </div>
             <div className="export-photo-strip">
-              {selectedGroup.photos.map((photo, index) => (
+              {selectedGroup.photos.map((photo) => (
                 <div className="export-photo-thumb-card" key={photo.id}>
                   <span className="group-photo-thumb">
                     {exportThumbnailUrls[photo.id] ? (
@@ -1874,7 +1954,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
                     )}
                     {photo.original_filename.toLowerCase().includes("qr") && <em>QR</em>}
                   </span>
-                  <strong>{getPhotoSlotLabel(index)}</strong>
+                  <strong>{getPhotoTypeLabel(getInitialPhotoType(photo))}</strong>
                   <span>{photo.original_filename}</span>
                 </div>
               ))}
@@ -2022,7 +2102,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.7.1 Phase 6-B</dd>
+            <dd>0.8.0 Phase 7-A</dd>
           </div>
           <div>
             <dt>構成</dt>

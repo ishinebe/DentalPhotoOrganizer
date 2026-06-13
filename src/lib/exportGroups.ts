@@ -8,6 +8,8 @@ export type ExportGroupPhoto = {
   original_filename: string;
   original_path: string | null;
   export_status: ExportStatus;
+  photo_type: string | null;
+  photo_type_source: string | null;
   sort_order: number | null;
 };
 
@@ -58,6 +60,8 @@ type ExportPhotoRow = {
   original_filename: string;
   original_path: string | null;
   export_status: ExportStatus;
+  photo_type: string | null;
+  photo_type_source: string | null;
 };
 
 const exportGroupColumns = [
@@ -71,7 +75,7 @@ const exportGroupColumns = [
   "created_at"
 ].join(",");
 
-const exportPhotoColumns = ["id", "original_filename", "original_path", "export_status"].join(",");
+const exportPhotoColumns = ["id", "original_filename", "original_path", "export_status", "photo_type", "photo_type_source"].join(",");
 
 export async function fetchReadyExportGroups(): Promise<ExportGroupsResult> {
   if (!hasSupabaseConfig || !supabase) {

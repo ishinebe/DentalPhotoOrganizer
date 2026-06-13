@@ -1079,6 +1079,19 @@ textarea:focus {
   text-align: left;
 }
 
+.group-photo-select-button {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .group-photo-card:hover,
 .group-photo-card.active {
   border-color: #2474c9;
@@ -1100,6 +1113,36 @@ textarea:focus {
 .group-photo-card span {
   color: #667085;
   font-size: 0.76rem;
+}
+
+.photo-type-select,
+.selected-photo-type-control {
+  display: grid;
+  gap: 6px;
+  color: #475467;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.photo-type-select select,
+.selected-photo-type-control select {
+  min-width: 0;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid #c8d7e8;
+  border-radius: 8px;
+  color: #12283f;
+  background: #ffffff;
+  font: inherit;
+}
+
+.selected-photo-type-control {
+  grid-template-columns: minmax(90px, auto) minmax(160px, 1fr);
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #d9e3ef;
+  border-radius: 8px;
+  background: #f8fbff;
 }
 
 .group-photo-thumb {
