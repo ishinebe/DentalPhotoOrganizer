@@ -23,6 +23,7 @@ export type ExportGroup = {
   doctor_name: string | null;
   photographer_id: string | null;
   photographer_name: string | null;
+  photo_protocol: string | null;
   review_status: "approved";
   export_status: "ready_for_export";
   created_at: string | null;
@@ -46,6 +47,7 @@ type ExportGroupRow = {
   shooting_date: string | null;
   doctor_id: string | null;
   photographer_id: string | null;
+  photo_protocol: string | null;
   review_status: "approved";
   export_status: "ready_for_export";
   created_at: string | null;
@@ -74,6 +76,7 @@ const exportGroupColumns = [
   "shooting_date",
   "doctor_id",
   "photographer_id",
+  "photo_protocol",
   "review_status",
   "export_status",
   "created_at"

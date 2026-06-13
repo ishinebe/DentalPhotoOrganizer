@@ -661,7 +661,29 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 7-D0 - 撮影種別マスタ設計
+Current phase: Phase 7-D1 - 撮影方法選択
+
+Phase7-D1 adds shooting protocol selection per shooting set:
+
+* Apply `supabase/phase7d1_photo_protocol.sql` before using this phase.
+* Review stores `photo_groups.photo_protocol` from the shooting set metadata form.
+* The default protocol is `five_view` when the DB value is empty.
+* Available protocols come from `src/lib/photoTypes.ts`: `five_view`, `nine_view`, `fourteen_view`, `partial`, and `other`.
+* `レビュー内容を保存` and `問題なしで確定` both save the selected shooting protocol.
+* Approved sets show the protocol but keep the field read-only, matching the existing metadata behavior.
+* Export pre-check displays the selected shooting protocol.
+* Completeness checks still behave like the existing five-view check in this phase; detailed 9-view, 14-view, partial, and other checks are planned for a later phase.
+
+Real environment verification for Phase7-D1:
+
+1. Run `supabase/phase7d1_photo_protocol.sql` in the Supabase SQL Editor.
+2. Open Review and confirm the `撮影方法` dropdown appears.
+3. Select `5枚法`, `9枚法`, `14枚法`, `部分撮影`, or `その他`.
+4. Click `レビュー内容を保存` and confirm `photo_groups.photo_protocol` is stored.
+5. Change the protocol and click `問題なしで確定`; confirm the latest protocol is stored.
+6. Reopen the set and confirm the saved value is restored.
+7. Open the approved tab and confirm the protocol field is read-only.
+8. Open Export and confirm the protocol is shown in the pre-export detail preview.
 
 Phase7-D0 centralizes photo type and photo protocol definitions for future 5-view, 9-view, 14-view, partial, and other shooting workflows:
 

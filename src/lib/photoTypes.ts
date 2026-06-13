@@ -90,3 +90,12 @@ export function getPhotoTypeOrder(value: string | null | undefined) {
 export function getRequiredPhotoTypesForProtocol(protocol: PhotoProtocolValue = "five_view") {
   return photoProtocolDefinitions.find((definition) => definition.value === protocol)?.requiredPhotoTypes ?? fiveViewRequiredPhotoTypes;
 }
+
+export function isPhotoProtocolValue(value: string | null | undefined): value is PhotoProtocolValue {
+  return photoProtocolDefinitions.some((definition) => definition.value === value);
+}
+
+export function getPhotoProtocolLabel(value: string | null | undefined) {
+  const normalized = isPhotoProtocolValue(value) ? value : defaultPhotoProtocol.value;
+  return photoProtocolDefinitions.find((definition) => definition.value === normalized)?.label ?? defaultPhotoProtocol.label;
+}

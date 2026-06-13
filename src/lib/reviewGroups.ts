@@ -16,6 +16,7 @@ export type ReviewGroup = {
   approved_at: string | null;
   created_at: string | null;
   patient_uuid: string | null;
+  photo_protocol: string | null;
   notes: string | null;
   photo_count: number;
   qr_patient_candidate: string | null;
@@ -53,6 +54,7 @@ export type ReviewGroupForm = {
   shooting_date: string;
   doctor_id: string;
   photographer_id: string;
+  photo_protocol: string;
   notes: string;
 };
 
@@ -102,7 +104,8 @@ const groupColumns = [
   "reviewed_at",
   "approved_at",
   "created_at",
-  "patient_uuid"
+  "patient_uuid",
+  "photo_protocol"
 ].join(",");
 
 const photoColumns = [
@@ -327,6 +330,7 @@ export async function updateReviewGroupMetadata(
     shooting_date: normalizeNullableText(form.shooting_date),
     doctor_id: normalizeNullableText(form.doctor_id),
     photographer_id: normalizeNullableText(form.photographer_id),
+    photo_protocol: normalizeNullableText(form.photo_protocol),
     reviewed_at: now
   };
 

@@ -18,9 +18,13 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
 import {
+  defaultPhotoProtocol,
+  getPhotoProtocolLabel,
   getPhotoTypeLabel,
   getPhotoTypeOrder,
   getRequiredPhotoTypesForProtocol,
+  isPhotoProtocolValue,
+  photoProtocolDefinitions,
   photoTypeOptions,
   type PhotoTypeValue
 } from "./lib/photoTypes";
@@ -125,13 +129,9 @@ const emptyReviewForm: ReviewGroupForm = {
   shooting_date: "",
   doctor_id: "",
   photographer_id: "",
+  photo_protocol: defaultPhotoProtocol.value,
   notes: ""
 };
-
-const standardPhotoTypes = getRequiredPhotoTypesForProtocol("five_view").map((value) => ({
-  value,
-  label: getPhotoTypeLabel(value)
-}));
 
 type ReviewOpenTarget = {
   groupId: string;
@@ -177,8 +177,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 7-D0</span>
-          <strong>撮影種別マスタ設計</strong>
+          <span>Phase 7-D1</span>
+          <strong>撮影方法選択</strong>
         </div>
       </aside>
 
@@ -733,13 +733,21 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
     () => sortPhotosForDisplay(groupPhotos, (photo) => photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo)),
     [groupPhotos, photoTypeDrafts]
   );
+  const requiredPhotoTypes = useMemo(
+    () =>
+      getRequiredPhotoTypesForProtocol(isPhotoProtocolValue(form.photo_protocol) ? form.photo_protocol : defaultPhotoProtocol.value).map((value) => ({
+        value,
+        label: getPhotoTypeLabel(value)
+      })),
+    [form.photo_protocol]
+  );
   const photoTypeCompleteness = useMemo(
     () =>
-      standardPhotoTypes.map((standardType) => ({
+      requiredPhotoTypes.map((standardType) => ({
         ...standardType,
         present: groupPhotos.some((photo) => (photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo)) === standardType.value)
       })),
-    [groupPhotos, photoTypeDrafts]
+    [groupPhotos, photoTypeDrafts, requiredPhotoTypes]
   );
   const selectedPhoto = groupPhotos.find((photo) => photo.id === selectedPhotoId) ?? sortedGroupPhotos[0] ?? null;
   const selectedPatientCandidate = getGroupPatientCandidate(selectedGroup);
@@ -958,6 +966,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
       shooting_date: selectedGroup.shooting_date ?? "",
       doctor_id: selectedGroup.doctor_id ?? "",
       photographer_id: selectedGroup.photographer_id ?? "",
+      photo_protocol: isPhotoProtocolValue(selectedGroup.photo_protocol) ? selectedGroup.photo_protocol : defaultPhotoProtocol.value,
       notes: selectedGroup.notes ?? ""
     });
   }, [selectedGroup]);
@@ -1599,6 +1608,20 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
             />
           </label>
           <label>
+            撮影方法
+            <select
+              value={form.photo_protocol}
+              onChange={(event) => updateFormValue("photo_protocol", event.target.value)}
+              disabled={!selectedGroup || isBusy || isApprovedMode}
+            >
+              {photoProtocolDefinitions.map((protocol) => (
+                <option key={protocol.value} value={protocol.value}>
+                  {protocol.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             担当医
             <select
               value={form.doctor_id}
@@ -1972,6 +1995,10 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
                 <dd>{selectedGroup.photos.length}枚</dd>
               </div>
               <div>
+                <dt>撮影方法</dt>
+                <dd>{getPhotoProtocolLabel(selectedGroup.photo_protocol)}</dd>
+              </div>
+              <div>
                 <dt>担当医</dt>
                 <dd>{selectedGroup.doctor_name ?? "-"}</dd>
               </div>
@@ -2151,7 +2178,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.8.3 Phase 7-D0</dd>
+            <dd>0.8.4 Phase 7-D1</dd>
           </div>
           <div>
             <dt>構成</dt>
