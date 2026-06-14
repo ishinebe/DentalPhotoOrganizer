@@ -98,7 +98,7 @@ export async function fetchReadyExportGroups(): Promise<ExportGroupsResult> {
     return {
       status: "not-configured",
       groups: [],
-      message: "Supabase未設定のためエクスポート対象を取得できません"
+      message: "Supabase未設定のため書き出し対象を取得できません"
     };
   }
 
@@ -123,7 +123,7 @@ export async function fetchReadyExportGroups(): Promise<ExportGroupsResult> {
     return {
       status: "success",
       groups: [],
-      message: "エクスポート対象の撮影セットはありません"
+      message: "書き出し対象の患者はありません"
     };
   }
 
@@ -191,7 +191,7 @@ export async function fetchReadyExportGroups(): Promise<ExportGroupsResult> {
   return {
     status: "success",
     groups,
-    message: "エクスポート対象を取得しました"
+    message: "書き出し対象を取得しました"
   };
 }
 
@@ -199,7 +199,7 @@ export async function markGroupsExported(groupIds: string[]): Promise<MarkExport
   if (!hasSupabaseConfig || !supabase) {
     return {
       status: "not-configured",
-      message: "Supabase未設定のためエクスポート状態を更新できません"
+      message: "Supabase未設定のため書き出し状態を更新できません"
     };
   }
 
@@ -255,7 +255,7 @@ export async function markGroupsExported(groupIds: string[]): Promise<MarkExport
 
   return {
     status: "success",
-    message: "エクスポート済みに更新しました"
+    message: "書き出し済みに更新しました"
   };
 }
 

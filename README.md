@@ -661,7 +661,30 @@ All grouping and metadata management should be database-driven.
 
 ## Current Phase
 
-Current phase: Phase 7-D4 - 写真確認用語改善
+Current phase: Phase 7-E1 - 書き出し前確認UI
+Phase7-E1 improves the write-out screen for final non-developer confirmation:
+
+* The Export screen now uses user-facing `書き出し` wording instead of developer-facing export labels.
+* The top guidance explains that confirmed photos are copied into patient folders and that original photos are not changed.
+* The Electron status display is shown as `書き出し機能: 利用可能` when normal local write-out is available.
+* The target list is shown as `書き出し対象の患者`, with Japanese status labels such as `確認完了` and `書き出し待ち`.
+* The selected patient preview is now `書き出し前の最終確認` and shows patient ID, shooting date, protocol, photo count, doctor, photographer, and status.
+* The write-out preview includes an advisory shooting standard check. Missing, unclassified, or other photo types do not block write-out.
+* The photo thumbnails are shown under `この患者の写真`, with photo type labels and file names.
+* The correction path is shown as `写真確認に戻る` so users can return to photo confirmation before writing out.
+* The write-out button is shown as `書き出し開始`, with explanatory text that photos are copied to the selected folder.
+
+Real environment verification for Phase7-E1:
+
+1. Open Write-out and confirm the screen uses `書き出し` wording.
+2. Confirm the explanation says original photos are not changed.
+3. Confirm `書き出し機能: 利用可能` is shown in Electron when the local write-out API is available.
+4. Select a patient and confirm `書き出し前の最終確認` shows patient metadata and Japanese status labels.
+5. Confirm the shooting standard check appears and does not block write-out.
+6. Confirm thumbnails appear under `この患者の写真`.
+7. Click `写真確認に戻る` and confirm it opens the selected patient in photo confirmation.
+8. Select a write-out destination and confirm `書き出し開始` still copies files without modifying originals.
+
 Phase7-D4 improves photo confirmation wording and selected-photo operations for non-developer users:
 
 * Review UI still keeps the internal patient photo set model, but screen wording now prefers `患者`, `この患者の写真`, and `患者ごとの写真`.

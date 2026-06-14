@@ -470,6 +470,15 @@ h3 {
   background: #fff8f6;
 }
 
+.api-diagnostic.compact {
+  align-items: center;
+  padding: 9px 11px;
+}
+
+.api-diagnostic.compact p {
+  display: none;
+}
+
 .api-diagnostic strong,
 .api-diagnostic small,
 .api-diagnostic p {
@@ -1832,9 +1841,18 @@ textarea:focus {
 }
 
 .export-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(0, 1fr) auto;
+  align-items: center;
   gap: 10px;
   margin: 16px 0;
+}
+
+.export-actions p {
+  margin: 0;
+  color: #667085;
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .export-result-panel {
@@ -1888,11 +1906,24 @@ textarea:focus {
   gap: 12px;
 }
 
+.export-preview-header div {
+  display: grid;
+  gap: 3px;
+}
+
 .export-preview-header strong {
   color: #12283f;
 }
 
+.export-preview-header p {
+  margin: 0;
+  color: #667085;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .export-preview-header button {
+  flex: 0 0 auto;
   min-height: 36px;
   padding: 0 13px;
   border: 1px solid #1265b4;
@@ -1900,6 +1931,20 @@ textarea:focus {
   color: #1265b4;
   background: #eef6ff;
   font-weight: 700;
+}
+
+.export-photo-check-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  background: #f8fbfe;
+}
+
+.export-photo-check-panel > strong {
+  color: #12283f;
+  font-size: 0.86rem;
 }
 
 .export-photo-strip {

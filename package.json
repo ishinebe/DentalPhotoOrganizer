@@ -1,8 +1,8 @@
 {
   "name": "dental-photo-organizer",
-  "version": "0.8.7",
+  "version": "0.8.8",
   "private": true,
-  "description": "DentalPhotoOrganizer Phase7-D4 photo confirmation wording",
+  "description": "DentalPhotoOrganizer Phase7-E1 export confirmation UI",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {

@@ -84,7 +84,7 @@ type ReviewActionStatus =
   | "分け直し失敗";
 type PreviewStatus = "未選択" | "読み込み中" | "表示中" | "読み込み失敗" | "未対応形式" | "Electron API未接続";
 type ExportLoadStatus = "読み込み中" | "表示中" | "データなし" | "取得失敗" | "Supabase未設定";
-type ExportActionStatus = "待機中" | "フォルダ選択中" | "エクスポート中" | "エクスポート完了" | "エクスポート失敗";
+type ExportActionStatus = "待機中" | "フォルダ選択中" | "書き出し中" | "書き出し完了" | "書き出し失敗";
 
 const emptyStats = {
   totalPhotos: 0,
@@ -97,7 +97,7 @@ const navItems: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "dashboard", label: "ホーム", icon: Gauge },
   { id: "import", label: "写真取込", icon: FolderDown },
   { id: "review", label: "写真確認", icon: ClipboardCheck },
-  { id: "export", label: "エクスポート", icon: HardDriveDownload },
+  { id: "export", label: "書き出し", icon: HardDriveDownload },
   { id: "search", label: "写真検索", icon: Search },
   { id: "settings", label: "設定", icon: Settings }
 ];
@@ -178,8 +178,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 7-D4</span>
-          <strong>写真確認用語改善</strong>
+          <span>Phase 7-E1</span>
+          <strong>書き出し前確認UI</strong>
         </div>
       </aside>
 
@@ -601,6 +601,42 @@ function countExportPhotos(groups: ExportGroup[]) {
   return groups.reduce((total, group) => total + group.photos.length, 0);
 }
 
+function getExportStatusLabel(status: string | null | undefined) {
+  if (status === "ready_for_export") {
+    return "書き出し待ち";
+  }
+
+  if (status === "exported") {
+    return "書き出し済み";
+  }
+
+  if (status === "export_failed") {
+    return "書き出し失敗";
+  }
+
+  if (status === "not_exported") {
+    return "未書き出し";
+  }
+
+  return "未設定";
+}
+
+function getReviewStatusDisplayLabel(status: string | null | undefined) {
+  if (status === "approved") {
+    return "確認完了";
+  }
+
+  if (status === "pending") {
+    return "確認待ち";
+  }
+
+  if (status === "reviewing") {
+    return "確認中";
+  }
+
+  return "未設定";
+}
+
 function formatGroupOption(group: ReviewGroup) {
   const patientCandidate = getGroupPatientCandidate(group);
   const label = patientCandidate ? `患者候補 ${patientCandidate}` : `患者 ${group.id.slice(0, 8)}`;
@@ -650,6 +686,31 @@ function getInitialPhotoType(
 ) {
   const detectedQr = hasDetectedQrCode(photo) || isQrFilename(photo.original_filename);
   return isPhotoTypeValue(photo.photo_type) ? photo.photo_type : detectedQr ? "qr" : "unclassified";
+}
+
+function getPhotoTypeCheckSummary(
+  photos: Array<Pick<ExportGroupPhoto, "photo_type" | "original_filename" | "code_type" | "code_text">>,
+  protocolValue: string | null | undefined
+) {
+  const protocol = getPhotoProtocolDefinition(protocolValue);
+  const counts = new Map<PhotoTypeValue, number>();
+
+  for (const photo of photos) {
+    const photoType = getInitialPhotoType(photo);
+    counts.set(photoType, (counts.get(photoType) ?? 0) + 1);
+  }
+
+  return {
+    protocol,
+    missingRequiredTypes: protocol.requiredPhotoTypes
+      .filter((photoType) => (counts.get(photoType) ?? 0) === 0)
+      .map((photoType) => ({
+        value: photoType,
+        label: getPhotoTypeLabel(photoType)
+      })),
+    otherCount: counts.get("other") ?? 0,
+    unclassifiedCount: counts.get("unclassified") ?? 0
+  };
 }
 
 function sortPhotosForDisplay<T extends { original_filename: string; sort_order?: number | null }>(
@@ -1805,7 +1866,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
   const [exportThumbnailUrls, setExportThumbnailUrls] = useState<Record<string, string>>({});
   const [loadStatus, setLoadStatus] = useState<ExportLoadStatus>("読み込み中");
   const [actionStatus, setActionStatus] = useState<ExportActionStatus>("待機中");
-  const [message, setMessage] = useState("エクスポート対象を読み込んでいます");
+  const [message, setMessage] = useState("書き出し対象を読み込んでいます");
   const [exportRootPath, setExportRootPath] = useState<string | null>(null);
   const [resultSummary, setResultSummary] = useState<{
     successGroupCount: number;
@@ -1817,7 +1878,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
   const isElectronApiConnected =
     typeof window.electronAPI?.selectExportFolder === "function" &&
     typeof window.electronAPI?.exportPhotoFiles === "function";
-  const isBusy = loadStatus === "読み込み中" || actionStatus === "フォルダ選択中" || actionStatus === "エクスポート中";
+  const isBusy = loadStatus === "読み込み中" || actionStatus === "フォルダ選択中" || actionStatus === "書き出し中";
   const targetPhotoCount = countExportPhotos(groups);
   const canExport = isElectronApiConnected && Boolean(exportRootPath) && groups.length > 0 && targetPhotoCount > 0 && !isBusy;
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
@@ -1825,11 +1886,15 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
     () => (selectedGroup ? sortPhotosForDisplay(selectedGroup.photos, getInitialPhotoType) : []),
     [selectedGroup]
   );
+  const selectedExportPhotoTypeCheck = useMemo(
+    () => (selectedGroup ? getPhotoTypeCheckSummary(selectedGroup.photos, selectedGroup.photo_protocol) : null),
+    [selectedGroup]
+  );
 
   const loadExportTargets = useCallback(async () => {
     setLoadStatus("読み込み中");
     setActionStatus("待機中");
-    setMessage("エクスポート対象を読み込んでいます");
+    setMessage("書き出し対象を読み込んでいます");
 
     const result = await fetchReadyExportGroups();
 
@@ -1900,8 +1965,8 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
 
   const handleSelectExportFolder = async () => {
     if (!window.electronAPI?.selectExportFolder) {
-      setActionStatus("エクスポート失敗");
-      setMessage("Electron API未接続のため出力先フォルダを選択できません");
+      setActionStatus("書き出し失敗");
+      setMessage("書き出し機能を利用できないため、書き出し先フォルダを選択できません");
       return;
     }
 
@@ -1918,22 +1983,22 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
 
       setExportRootPath(selection.folderPath);
       setActionStatus("待機中");
-      setMessage("出力先フォルダを選択しました");
+      setMessage("書き出し先フォルダを選択しました");
     } catch {
-      setActionStatus("エクスポート失敗");
-      setMessage("出力先フォルダの選択に失敗しました");
+      setActionStatus("書き出し失敗");
+      setMessage("書き出し先フォルダの選択に失敗しました");
     }
   };
 
   const handleStartExport = async () => {
     if (!window.electronAPI?.exportPhotoFiles || !exportRootPath) {
-      setActionStatus("エクスポート失敗");
-      setMessage("Electron API未接続、または出力先フォルダが未選択です");
+      setActionStatus("書き出し失敗");
+      setMessage("書き出し機能を利用できない、または書き出し先フォルダが未選択です");
       return;
     }
 
-    setActionStatus("エクスポート中");
-    setMessage("元画像を変更せず、出力先へコピーしています");
+    setActionStatus("書き出し中");
+    setMessage("元の写真を変更せず、書き出し先へコピーしています");
     setResultSummary(null);
 
     const copyPayload = {
@@ -1958,7 +2023,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
         const markResult = await markGroupsExported(copyResult.successGroupIds);
 
         if (markResult.status !== "success") {
-          setActionStatus("エクスポート失敗");
+          setActionStatus("書き出し失敗");
           setMessage(`コピー後のDB更新に失敗しました: ${markResult.message}`);
           return;
         }
@@ -1969,20 +2034,20 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
         successPhotoCount: copyResult.successPhotoCount,
         failedPhotoCount: copyResult.failedPhotoCount,
         failures: copyResult.failures.map((failure) => ({
-          originalFilename: failure.originalFilename || "撮影セット",
+          originalFilename: failure.originalFilename || "写真",
           message: failure.message
         }))
       });
-      setActionStatus(copyResult.status === "success" ? "エクスポート完了" : "エクスポート失敗");
+      setActionStatus(copyResult.status === "success" ? "書き出し完了" : "書き出し失敗");
       setMessage(
         copyResult.status === "success"
-          ? "エクスポートが完了しました"
-          : "一部の写真をエクスポートできませんでした。失敗した撮影セットは ready_for_export のまま残ります"
+          ? "書き出しが完了しました"
+          : "一部の写真を書き出しできませんでした。失敗した患者は書き出し待ちのまま残ります"
       );
       await loadExportTargets();
     } catch {
-      setActionStatus("エクスポート失敗");
-      setMessage("エクスポート処理に失敗しました");
+      setActionStatus("書き出し失敗");
+      setMessage("書き出し処理に失敗しました");
     }
   };
 
@@ -1992,14 +2057,14 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
         <div className="panel-heading">
           <HardDriveDownload size={24} />
           <div>
-            <h2>エクスポート</h2>
-            <p>レビュー完了済みで、まだ出力されていない撮影セットをコピー出力します。</p>
+            <h2>書き出し</h2>
+            <p>確認完了した写真を、患者ごとのフォルダへコピーします。元の写真は変更されません。</p>
           </div>
         </div>
 
         <div className="export-metrics">
           <article>
-            <span>対象撮影セット数</span>
+            <span>書き出し対象の患者</span>
             <strong>{groups.length.toLocaleString()}件</strong>
           </article>
           <article>
@@ -2012,21 +2077,21 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
           </article>
         </div>
 
-        <div className={isElectronApiConnected ? "api-diagnostic connected" : "api-diagnostic disconnected"}>
+        <div className={isElectronApiConnected ? "api-diagnostic connected compact" : "api-diagnostic disconnected"}>
           <span className={isElectronApiConnected ? "status-dot ready" : "status-dot danger"} />
           <div>
-            <strong>{isElectronApiConnected ? "Electron API接続済み" : "Electron API未接続"}</strong>
+            <strong>{isElectronApiConnected ? "書き出し機能: 利用可能" : "書き出し機能: 利用できません"}</strong>
             <p>
               {isElectronApiConnected
-                ? "出力先フォルダ選択とローカルファイルコピーを preload 経由で実行できます"
-                : "ブラウザ単体ではエクスポートできません。Electronウィンドウで起動してください"}
+                ? "書き出し先フォルダを選び、元の写真を変更せずコピーできます"
+                : "ブラウザ単体では書き出しできません。Electronウィンドウで起動してください"}
             </p>
           </div>
         </div>
 
         <div className="export-folder-row">
           <div>
-            <span>出力先フォルダ</span>
+            <span>書き出し先フォルダ</span>
             <strong>{exportRootPath ?? "未選択"}</strong>
           </div>
           <button type="button" onClick={handleSelectExportFolder} disabled={!isElectronApiConnected || isBusy}>
@@ -2036,14 +2101,15 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
 
         <div className="export-actions">
           <button className="primary-button" type="button" onClick={handleStartExport} disabled={!canExport}>
-            エクスポート開始
+            書き出し開始
           </button>
+          <p>選択したフォルダに、患者ごとのフォルダを作成してコピーします。</p>
           <button type="button" onClick={() => void loadExportTargets()} disabled={isBusy}>
             再読み込み
           </button>
         </div>
 
-        <div className={`review-status ${actionStatus === "エクスポート失敗" ? "error" : ""}`}>
+        <div className={`review-status ${actionStatus === "書き出し失敗" ? "error" : ""}`}>
           <strong>{actionStatus}</strong>
           <span>{message}</span>
         </div>
@@ -2051,7 +2117,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
         {selectedGroup ? (
           <section className="export-preview-panel">
             <div className="column-title">
-              <h2>選択中の撮影セット確認</h2>
+              <h2>書き出し前の最終確認</h2>
               <span>{selectedGroup.photos.length}枚</span>
             </div>
             <dl className="export-preview-meta">
@@ -2080,16 +2146,59 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
                 <dd>{selectedGroup.photographer_name ?? "-"}</dd>
               </div>
               <div>
-                <dt>status</dt>
-                <dd>
-                  {selectedGroup.review_status} / {selectedGroup.export_status}
-                </dd>
+                <dt>状態</dt>
+                <dd>{getReviewStatusDisplayLabel(selectedGroup.review_status)} / {getExportStatusLabel(selectedGroup.export_status)}</dd>
               </div>
             </dl>
+            {selectedExportPhotoTypeCheck && (
+              <div className="export-photo-check-panel">
+                <strong>撮影基準チェック</strong>
+                {selectedExportPhotoTypeCheck.protocol.value === "fourteen_view" ? (
+                  <p className="photo-type-check-message">14枚法の詳細チェックは今後対応予定です。撮影方法は保存されています。</p>
+                ) : selectedExportPhotoTypeCheck.protocol.value === "partial" ? (
+                  <p className="photo-type-check-message">部分撮影として確認します。不足判定は行いません。</p>
+                ) : selectedExportPhotoTypeCheck.protocol.value === "other" ? (
+                  <p className="photo-type-check-message">その他の撮影方法として確認します。不足判定は行いません。</p>
+                ) : selectedExportPhotoTypeCheck.missingRequiredTypes.length === 0 ? (
+                  <p className="photo-type-check-message complete">
+                    {selectedExportPhotoTypeCheck.protocol.label}の基本写真が揃っています
+                  </p>
+                ) : (
+                  <div className="photo-type-check-section">
+                    <p>確認が必要な写真があります</p>
+                    <span>{selectedExportPhotoTypeCheck.protocol.label}で不足している可能性があります</span>
+                    <ul>
+                      {selectedExportPhotoTypeCheck.missingRequiredTypes.map((item) => (
+                        <li key={item.value}>{item.label}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(selectedExportPhotoTypeCheck.otherCount > 0 || selectedExportPhotoTypeCheck.unclassifiedCount > 0) && (
+                  <div className="photo-type-check-cautions">
+                    {selectedExportPhotoTypeCheck.otherCount > 0 && (
+                      <div>
+                        <p>基本分類以外の写真があります</p>
+                        <span>要確認: その他 {selectedExportPhotoTypeCheck.otherCount}枚</span>
+                      </div>
+                    )}
+                    {selectedExportPhotoTypeCheck.unclassifiedCount > 0 && (
+                      <div>
+                        <p>未分類の写真があります</p>
+                        <span>要確認: 未分類 {selectedExportPhotoTypeCheck.unclassifiedCount}枚</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="export-preview-header">
-              <strong>撮影セット内写真</strong>
+              <div>
+                <strong>この患者の写真</strong>
+                <p>写真の移動や分類修正が必要な場合は、写真確認画面に戻って修正します。</p>
+              </div>
               <button type="button" onClick={() => onOpenReview(selectedGroup.id)}>
-                確認画面で開く
+                写真確認に戻る
               </button>
             </div>
             <div className="export-photo-strip">
@@ -2112,16 +2221,16 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
         ) : (
           <div className="empty-result compact">
             <HardDriveDownload size={24} />
-            <span>撮影セットを選択すると、エクスポート前確認が表示されます</span>
+            <span>患者を選択すると、書き出し前の最終確認が表示されます</span>
           </div>
         )}
 
         {resultSummary && (
           <section className="export-result-panel">
-            <h3>エクスポート結果</h3>
+            <h3>書き出し結果</h3>
             <dl>
               <div>
-                <dt>成功した撮影セット</dt>
+                <dt>成功した患者</dt>
                 <dd>{resultSummary.successGroupCount}件</dd>
               </div>
               <div>
@@ -2149,7 +2258,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
 
       <aside className="export-target-panel">
         <div className="column-title">
-          <h2>対象撮影セット一覧</h2>
+          <h2>書き出し対象の患者</h2>
           <span>{groups.length}件</span>
         </div>
         <div className="export-target-list">
@@ -2165,13 +2274,13 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
               <span>写真枚数: {group.photos.length}枚</span>
               <span>担当医: {group.doctor_name ?? "-"}</span>
               <span>撮影者: {group.photographer_name ?? "-"}</span>
-              <em>{group.export_status}</em>
+              <em>状態: {getReviewStatusDisplayLabel(group.review_status)} / {getExportStatusLabel(group.export_status)}</em>
             </button>
           ))}
           {groups.length === 0 && (
             <div className="empty-result compact">
               <HardDriveDownload size={24} />
-              <span>{loadStatus === "読み込み中" ? "読み込み中" : "エクスポート対象はありません"}</span>
+              <span>{loadStatus === "読み込み中" ? "読み込み中" : "書き出し対象はありません"}</span>
             </div>
           )}
         </div>
@@ -2251,7 +2360,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.8.7 Phase 7-D4</dd>
+            <dd>0.8.8 Phase 7-E1</dd>
           </div>
           <div>
             <dt>構成</dt>
