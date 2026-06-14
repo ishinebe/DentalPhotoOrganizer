@@ -20,6 +20,7 @@ DentalPhotoOrganizer supports the following workflow:
 10. Re-check approved photo sets before export.
 11. Export only after final human confirmation.
 12. Preserve review and export history.
+13. Search past patient photographs for later review, correction, or export-related work.
 
 ## User Context
 
@@ -46,6 +47,8 @@ After review, the user moves to export.
 Before export, the user can still check the photo set again and return to the review screen if correction is needed.
 
 The application exports only reviewed and approved photo sets.
+
+Later, the user may search by patient ID, shooting date, attending doctor, or photographer to find previously imported patient photographs and reopen them for photo review.
 
 ## Import Workflow
 
@@ -98,6 +101,45 @@ Important rules:
 - The user must be able to correct mistakes intuitively.
 - The user should not need to remember information across screens.
 - The interface should reduce cognitive load and decision fatigue.
+
+## Search Workflow
+
+Search is used to find patient photographs after import, review, or export.
+
+The main search purpose is not to expose every internal status field. It is to help users quickly identify the patient photographs they are looking for.
+
+Primary search axes:
+
+- Patient ID.
+- Shooting date range.
+- Attending doctor.
+- Photographer.
+
+Search results should be patient-photo-set oriented rather than single-photo oriented unless the task explicitly requires photo-level search.
+
+Search result cards should help visual identification. Small thumbnail previews are often more useful than additional filter fields for confirming whether the result is the patient photographs the user wants.
+
+Recommended search result content:
+
+- Patient ID.
+- Shooting date.
+- Photo count.
+- Attending doctor.
+- Photographer.
+- Shooting protocol when available.
+- Review status.
+- Export status.
+- A small row of representative thumbnails when available.
+
+Important rules:
+
+- Search should read DB metadata and preview data only.
+- Search must not modify original image files.
+- Search must not bypass photo review.
+- Exported patients should still be searchable.
+- Search results should allow users to reopen the patient photographs in photo review.
+- Keep search filters focused on the fields users naturally remember.
+- Prefer visual confirmation in result cards over adding many rarely used filters.
 
 ## Export Workflow
 
@@ -162,6 +204,8 @@ The workflow implies the following design requirements:
 - Users must be able to move from export back to review.
 - Review status and export status should be visible.
 - Patient ID, date, attending doctor, and operator should be searchable.
+- Search should remain focused on memorable clinical metadata rather than exposing every internal status as a filter.
+- Search results should support visual identification with small representative thumbnails when possible.
 - The application should avoid unnecessary steps during repetitive review work.
 - The system should support overnight automated processing followed by morning human review.
 - Exported patients should remain available for later review, correction, or additional export workflows.
