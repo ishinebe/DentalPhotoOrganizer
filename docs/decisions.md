@@ -164,3 +164,28 @@ Design implications:
 
 Status:
 Accepted
+
+---
+
+## Decision 0011
+
+Title:
+Official exports are centralized to a configured export destination.
+
+Reason:
+After export, clinicians, residents, graduate students, or other staff may copy photographs to personal PCs, SD cards, USB drives, presentation folders, or research folders. Trying to track every secondary copy would make the application complex and unreliable. The application needs a clear boundary between the officially managed export result and later personal or departmental copying.
+
+Decision:
+DentalPhotoOrganizer manages only the official export destination configured for the clinic or department. Official exports should be written under that configured destination. Secondary copies from the official export folder to personal PCs, removable media, or other working folders are outside the application's tracking responsibility.
+
+Design implications:
+- The application should record the official export destination it created or used.
+- Search should open or locate only the recorded official export destination.
+- The application should not attempt to detect or track later copies to personal PCs, SD cards, USB drives, or other external locations.
+- Additional export should target the official export destination rather than arbitrary personal destinations.
+- Existing files in the official export destination must not be deleted or overwritten silently.
+- If users need photographs elsewhere, they should copy them from the official export destination outside the application.
+- This boundary prevents export path records from becoming fragmented across many individual users and devices.
+
+Status:
+Accepted
