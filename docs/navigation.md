@@ -6,9 +6,23 @@ The purpose of this file is progressive disclosure:
 do not read every document every time.
 Instead, read the minimum necessary documents in the right order for the task.
 
-## Always Read First
+## Project Entry Points
 
-Before making any product or workflow change, read:
+Before making a change, start with:
+
+1. AGENTS.md
+2. README.md
+3. docs/navigation.md
+
+AGENTS.md defines the non-negotiable working rules for AI coding agents.
+README.md summarizes the current implementation state.
+docs/navigation.md tells you which detailed documents to read next.
+
+After reading these entry points, choose the task category below and read only the relevant detailed documents.
+
+## Always Read for Product or Workflow Changes
+
+For product, workflow, safety, or terminology changes, read:
 
 1. docs/vision.md
 2. docs/principles.md
@@ -171,6 +185,8 @@ Important concepts:
 - 書き出し済みフォルダ
 - 書き出し対象外
 - 書き出し実行者
+- 追加書き出し
+- 再確認
 
 Rules:
 
@@ -179,6 +195,36 @@ Rules:
 - Users must be able to re-check before final export.
 - Users should be able to return from export to photo review if an error is found.
 - Exported folders are output results, not original storage locations.
+- Exported means exported at least once, not permanently locked.
+- Exported patients may require later review, correction, or additional export.
+- Do not delete or overwrite existing exported folders silently.
+- Future additional export workflows should prefer non-destructive copying or explicit backup behavior.
+
+## If modifying per-photo export target behavior
+
+Read in this order:
+
+1. docs/principles.md
+2. docs/decisions.md
+3. docs/workflow.md
+4. docs/glossary.md
+
+Important concepts:
+
+- 書き出し対象外
+- 書き出し
+- 書き出し済み
+- 取り込んだ写真
+- 原本画像
+- 写真タイプ
+
+Rules:
+
+- A photograph excluded from export should remain available for later inclusion.
+- Per-photo export inclusion must not delete or modify the source image.
+- Excluding a photo from export is not the same as deleting it.
+- Later inclusion should be possible without re-importing the original file.
+- UI should clearly explain whether a photo will be included in export.
 
 ## If modifying user roles or logs
 
@@ -215,10 +261,12 @@ Read in this order:
 
 Rules:
 
-- Use 患者写真セット instead of 撮影セット in user-facing UI.
 - Use 写真確認 instead of レビュー in user-facing UI.
 - Use 書き出し instead of エクスポート in user-facing UI.
 - Use 確認完了 instead of 承認 in user-facing UI.
+- Use 患者, この患者の写真, or 患者ごとの写真 for user-facing UI when that is clearer than 患者写真セット.
+- Use 患者写真セット as an internal concept or documentation term when precision is needed.
+- Do not use 患者セット, 撮影セット, or 統合先撮影セット in user-facing UI.
 - Avoid terms listed under Avoid in docs/glossary.md.
 - Do not rely on color alone to communicate important state.
 
@@ -236,11 +284,17 @@ Important concepts:
 - 撮影日
 - 担当医
 - 撮影者
+- 撮影方法
 - 写真タイプ
+- 写真確認状態
+- 書き出し状態
+- 書き出し対象外
 
 Rules:
 
 - Patient ID, shooting date, attending doctor, and photographer are important search axes.
+- Shooting protocol and photo type may also become important search or filtering axes.
+- Photo review status and export status should be understandable to non-developer users.
 - 撮影日 is not the same as import date, export date, review date, or file modified date.
 - Patient ID should not be embedded into original image filenames.
 
@@ -281,6 +335,8 @@ The following rules must not be violated:
 8. Do not rely on color alone to show critical states.
 9. Do not remove traceability for review, correction, or export actions.
 10. Do not change user-facing terminology without checking docs/glossary.md.
+11. Do not treat exported as a permanent lock state.
+12. Do not silently delete or overwrite exported folders when implementing later additional export or re-export behavior.
 
 ## Recommended Agent Workflow
 
