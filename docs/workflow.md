@@ -50,6 +50,8 @@ The application exports only reviewed and approved photo sets.
 
 Later, the user may search by patient ID, shooting date, attending doctor, or photographer to find previously imported patient photographs and reopen them for photo review.
 
+If the patient photographs have already been exported, the user may primarily want to find the exported folder or file location rather than return to the review workflow.
+
 ## Import Workflow
 
 During import:
@@ -131,6 +133,12 @@ Recommended search result content:
 - Export status.
 - A small row of representative thumbnails when available.
 
+Search result actions should reflect the user's likely intent.
+
+For unconfirmed or editable patient photographs, reopening photo review is the primary action.
+
+For already exported patient photographs, opening or locating the exported folder may be the primary action, while photo review should remain available as a secondary correction path.
+
 Important rules:
 
 - Search should read DB metadata and preview data only.
@@ -138,6 +146,9 @@ Important rules:
 - Search must not bypass photo review.
 - Exported patients should still be searchable.
 - Search results should allow users to reopen the patient photographs in photo review.
+- Search results should eventually support opening the recorded exported folder when the exported location is known.
+- Do not infer or guess an exported folder path from naming rules alone.
+- Only show an open-folder action when a recorded export destination is available.
 - Keep search filters focused on the fields users naturally remember.
 - Prefer visual confirmation in result cards over adding many rarely used filters.
 
@@ -157,6 +168,7 @@ Important rules:
 - Export must not modify original image files.
 - Export should make success and failure states obvious.
 - Export should leave enough information for later verification.
+- Export should record enough destination information to support later search, verification, and opening of exported folders.
 
 ## Post-export Correction and Additional Export
 
@@ -177,6 +189,8 @@ Important rules:
 - Existing exported files should not be deleted or overwritten silently.
 - A future per-photo export target flag may allow users to include or exclude individual photographs from export.
 - Photographs excluded from export should remain available for later inclusion.
+- Reopening photo review for exported patients is a correction path, not always the primary search action.
+- If an exported folder is available, search should help the user locate it without requiring unnecessary review steps.
 
 ## Error and Uncertainty Handling
 
@@ -206,6 +220,8 @@ The workflow implies the following design requirements:
 - Patient ID, date, attending doctor, and operator should be searchable.
 - Search should remain focused on memorable clinical metadata rather than exposing every internal status as a filter.
 - Search results should support visual identification with small representative thumbnails when possible.
+- Search result actions should prioritize likely user intent: review for correction, exported-folder access for locating already exported files.
+- Export workflows should preserve destination information for later retrieval.
 - The application should avoid unnecessary steps during repetitive review work.
 - The system should support overnight automated processing followed by morning human review.
 - Exported patients should remain available for later review, correction, or additional export workflows.
