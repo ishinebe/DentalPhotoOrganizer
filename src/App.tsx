@@ -39,6 +39,7 @@ import { importPhotoMetadata, type ImportPhotosResult, type LocalImageFile } fro
 import {
   searchPatientPhotoGroups,
   type SearchGroupFilters,
+  type SearchGroupPhoto,
   type SearchGroupResult
 } from "./lib/searchGroups";
 import {
@@ -144,10 +145,7 @@ const emptySearchFilters: SearchGroupFilters = {
   shootingDateFrom: "",
   shootingDateTo: "",
   doctor: "",
-  photographer: "",
-  photoProtocol: "",
-  reviewStatus: "",
-  exportStatus: ""
+  photographer: ""
 };
 
 type ReviewOpenTarget = {
@@ -2324,6 +2322,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
 function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: ReviewGroupListStatus) => void }) {
   const [filters, setFilters] = useState<SearchGroupFilters>(emptySearchFilters);
   const [results, setResults] = useState<SearchGroupResult[]>([]);
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"待機中" | "検索中" | "表示中" | "データなし" | "取得失敗" | "Supabase未設定">("待機中");
   const [message, setMessage] = useState("条件を入力して検索してください");
 
@@ -2374,6 +2373,48 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    let isCurrent = true;
+    const previewApi = window.electronAPI?.loadImagePreview;
+    const thumbnailTargets = results
+      .flatMap((group) => group.preview_photos)
+      .filter((photo) => photo.original_path)
+      .slice(0, 100)
+      .map((photo) => ({
+        photoId: photo.id,
+        path: photo.original_path as string
+      }));
+
+    setThumbnailUrls({});
+
+    if (!previewApi || thumbnailTargets.length === 0) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void Promise.all(
+      thumbnailTargets.map(async (target) => {
+        try {
+          const result = await previewApi(target.path);
+          return result.status === "success" && result.dataUrl ? [target.photoId, result.dataUrl] : null;
+        } catch {
+          return null;
+        }
+      })
+    ).then((entries) => {
+      if (!isCurrent) {
+        return;
+      }
+
+      setThumbnailUrls(Object.fromEntries(entries.filter((entry): entry is [string, string] => Boolean(entry))));
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [results]);
+
   return (
     <div className="search-layout">
       <section className="form-panel">
@@ -2419,34 +2460,6 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
               placeholder="名前またはID"
             />
           </label>
-          <label>
-            撮影方法
-            <select value={filters.photoProtocol} onChange={(event) => updateFilter("photoProtocol", event.target.value)}>
-              <option value="">すべて</option>
-              {photoProtocolDefinitions.map((protocol) => (
-                <option key={protocol.value} value={protocol.value}>
-                  {protocol.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            写真確認状態
-            <select value={filters.reviewStatus} onChange={(event) => updateFilter("reviewStatus", event.target.value)}>
-              <option value="">すべて</option>
-              <option value="pending">確認待ち</option>
-              <option value="approved">確認完了</option>
-            </select>
-          </label>
-          <label>
-            書き出し状態
-            <select value={filters.exportStatus} onChange={(event) => updateFilter("exportStatus", event.target.value)}>
-              <option value="">すべて</option>
-              <option value="not_exported">未書き出し</option>
-              <option value="ready_for_export">書き出し待ち</option>
-              <option value="exported">書き出し済み</option>
-            </select>
-          </label>
         </div>
         <div className="search-actions">
           <button className="primary-button" type="button" onClick={handleSearch} disabled={isSearching}>
@@ -2475,6 +2488,7 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
                   <strong>{group.patient_id ?? "患者ID未設定"}</strong>
                   <span>{group.photo_count}枚</span>
                 </div>
+                <SearchResultThumbnails photos={group.preview_photos} thumbnailUrls={thumbnailUrls} />
                 <dl>
                   <div>
                     <dt>撮影日</dt>
@@ -2520,6 +2534,43 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
       </section>
     </div>
   );
+}
+
+function SearchResultThumbnails({
+  photos,
+  thumbnailUrls
+}: {
+  photos: SearchGroupPhoto[];
+  thumbnailUrls: Record<string, string>;
+}) {
+  if (photos.length === 0) {
+    return <div className="search-thumbnail-empty">写真プレビューなし</div>;
+  }
+
+  return (
+    <div className="search-thumbnail-strip" aria-label="この患者の写真サムネイル">
+      {photos.slice(0, 5).map((photo) => (
+        <div className="search-thumbnail" key={photo.id}>
+          {thumbnailUrls[photo.id] ? (
+            <img src={thumbnailUrls[photo.id]} alt={photo.original_filename} />
+          ) : (
+            <div className="search-thumbnail-placeholder">
+              <ImageIcon size={18} />
+            </div>
+          )}
+          <span>{getSearchPhotoTypeLabel(photo)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function getSearchPhotoTypeLabel(photo: SearchGroupPhoto) {
+  if (!photo.photo_type && photo.code_type === "qrcode") {
+    return getPhotoTypeLabel("qr");
+  }
+
+  return getPhotoTypeLabel(photo.photo_type);
 }
 
 function SettingsView() {

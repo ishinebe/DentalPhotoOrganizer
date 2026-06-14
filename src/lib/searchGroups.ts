@@ -10,9 +10,15 @@ export type SearchGroupFilters = {
   shootingDateTo: string;
   doctor: string;
   photographer: string;
-  photoProtocol: string;
-  reviewStatus: string;
-  exportStatus: string;
+};
+
+export type SearchGroupPhoto = {
+  id: string;
+  original_filename: string;
+  original_path: string | null;
+  photo_type: string | null;
+  code_type: string | null;
+  sort_order: number | null;
 };
 
 export type SearchGroupResult = {
@@ -29,6 +35,7 @@ export type SearchGroupResult = {
   created_at: string | null;
   approved_at: string | null;
   photo_count: number;
+  preview_photos: SearchGroupPhoto[];
 };
 
 export type SearchGroupsResult = {
@@ -37,11 +44,20 @@ export type SearchGroupsResult = {
   message: string;
 };
 
-type SearchGroupRow = Omit<SearchGroupResult, "doctor_name" | "photographer_name" | "photo_count">;
+type SearchGroupRow = Omit<SearchGroupResult, "doctor_name" | "photographer_name" | "photo_count" | "preview_photos">;
 
 type SearchGroupItemRow = {
   photo_group_id: string;
   photo_id: string;
+  sort_order: number | null;
+};
+
+type SearchPhotoRow = {
+  id: string;
+  original_filename: string;
+  original_path: string | null;
+  photo_type: string | null;
+  code_type: string | null;
 };
 
 const searchGroupColumns = [
@@ -85,18 +101,6 @@ export async function searchPatientPhotoGroups(filters: SearchGroupFilters): Pro
     query = query.lte("shooting_date", filters.shootingDateTo);
   }
 
-  if (filters.photoProtocol) {
-    query = query.eq("photo_protocol", filters.photoProtocol);
-  }
-
-  if (filters.reviewStatus) {
-    query = query.eq("review_status", filters.reviewStatus);
-  }
-
-  if (filters.exportStatus) {
-    query = query.eq("export_status", filters.exportStatus);
-  }
-
   const { data, error } = await query;
   if (error) {
     return {
@@ -120,8 +124,9 @@ export async function searchPatientPhotoGroups(filters: SearchGroupFilters): Pro
   const groupIds = groupRows.map((group) => group.id);
   const { data: itemData, error: itemError } = await supabase
     .from("photo_group_items")
-    .select("photo_group_id,photo_id")
-    .in("photo_group_id", groupIds);
+    .select("photo_group_id,photo_id,sort_order")
+    .in("photo_group_id", groupIds)
+    .order("sort_order", { ascending: true, nullsFirst: false });
 
   if (itemError) {
     return {
@@ -131,7 +136,9 @@ export async function searchPatientPhotoGroups(filters: SearchGroupFilters): Pro
     };
   }
 
-  const photoCounts = countPhotosByGroup((itemData ?? []) as unknown as SearchGroupItemRow[]);
+  const groupItems = dedupeGroupItemsByPhoto((itemData ?? []) as unknown as SearchGroupItemRow[]);
+  const photoCounts = countPhotosByGroup(groupItems);
+  const previewPhotosByGroup = await fetchPreviewPhotosByGroup(groupItems);
   const doctorFilter = filters.doctor.trim().toLowerCase();
   const photographerFilter = filters.photographer.trim().toLowerCase();
   const groups = groupRows
@@ -139,7 +146,8 @@ export async function searchPatientPhotoGroups(filters: SearchGroupFilters): Pro
       ...group,
       doctor_name: group.doctor_id ? staffNameById.get(group.doctor_id) ?? group.doctor_id : null,
       photographer_name: group.photographer_id ? staffNameById.get(group.photographer_id) ?? group.photographer_id : null,
-      photo_count: photoCounts.get(group.id) ?? 0
+      photo_count: photoCounts.get(group.id) ?? 0,
+      preview_photos: previewPhotosByGroup.get(group.id) ?? []
     }))
     .filter((group) => group.photo_count > 0)
     .filter((group) => matchesStaffFilter(group.doctor_id, group.doctor_name, doctorFilter))
@@ -154,19 +162,69 @@ export async function searchPatientPhotoGroups(filters: SearchGroupFilters): Pro
 
 function countPhotosByGroup(items: SearchGroupItemRow[]) {
   const counts = new Map<string, number>();
-  const seenKeys = new Set<string>();
 
   for (const item of items) {
-    const key = `${item.photo_group_id}:${item.photo_id}`;
-    if (seenKeys.has(key)) {
-      continue;
-    }
-
-    seenKeys.add(key);
     counts.set(item.photo_group_id, (counts.get(item.photo_group_id) ?? 0) + 1);
   }
 
   return counts;
+}
+
+function dedupeGroupItemsByPhoto(items: SearchGroupItemRow[]) {
+  const seenKeys = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.photo_group_id}:${item.photo_id}`;
+    if (seenKeys.has(key)) {
+      return false;
+    }
+
+    seenKeys.add(key);
+    return true;
+  });
+}
+
+async function fetchPreviewPhotosByGroup(items: SearchGroupItemRow[]) {
+  const result = new Map<string, SearchGroupPhoto[]>();
+  if (!supabase || items.length === 0) {
+    return result;
+  }
+
+  const previewItems = new Map<string, SearchGroupItemRow[]>();
+  for (const item of items) {
+    const current = previewItems.get(item.photo_group_id) ?? [];
+    if (current.length < 5) {
+      current.push(item);
+      previewItems.set(item.photo_group_id, current);
+    }
+  }
+
+  const photoIds = Array.from(new Set(Array.from(previewItems.values()).flat().map((item) => item.photo_id)));
+  if (photoIds.length === 0) {
+    return result;
+  }
+
+  const { data, error } = await supabase
+    .from("photos")
+    .select("id,original_filename,original_path,photo_type,code_type")
+    .in("id", photoIds);
+
+  if (error) {
+    return result;
+  }
+
+  const photoById = new Map(((data ?? []) as unknown as SearchPhotoRow[]).map((photo) => [photo.id, photo]));
+  for (const [groupId, groupItems] of previewItems.entries()) {
+    const photos = groupItems
+      .map((item) => {
+        const photo = photoById.get(item.photo_id);
+        return photo ? { ...photo, sort_order: item.sort_order } : null;
+      })
+      .filter((photo): photo is SearchGroupPhoto => Boolean(photo));
+
+    result.set(groupId, photos);
+  }
+
+  return result;
 }
 
 function matchesStaffFilter(id: string | null, name: string | null, filter: string) {
