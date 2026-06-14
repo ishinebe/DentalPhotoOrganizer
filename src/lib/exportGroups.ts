@@ -27,6 +27,8 @@ export type ExportGroup = {
   review_status: "approved";
   export_status: "ready_for_export";
   created_at: string | null;
+  official_export_folder_path: string | null;
+  official_exported_at: string | null;
   photos: ExportGroupPhoto[];
 };
 
@@ -41,6 +43,11 @@ export type MarkExportedResult = {
   message: string;
 };
 
+export type MarkExportedGroup = {
+  groupId: string;
+  officialExportFolderPath: string;
+};
+
 type ExportGroupRow = {
   id: string;
   patient_id: string | null;
@@ -51,6 +58,8 @@ type ExportGroupRow = {
   review_status: "approved";
   export_status: "ready_for_export";
   created_at: string | null;
+  official_export_folder_path: string | null;
+  official_exported_at: string | null;
 };
 
 type ExportGroupItemRow = {
@@ -79,7 +88,9 @@ const exportGroupColumns = [
   "photo_protocol",
   "review_status",
   "export_status",
-  "created_at"
+  "created_at",
+  "official_export_folder_path",
+  "official_exported_at"
 ].join(",");
 
 const exportPhotoColumns = [
@@ -195,7 +206,7 @@ export async function fetchReadyExportGroups(): Promise<ExportGroupsResult> {
   };
 }
 
-export async function markGroupsExported(groupIds: string[]): Promise<MarkExportedResult> {
+export async function markGroupsExported(groups: MarkExportedGroup[]): Promise<MarkExportedResult> {
   if (!hasSupabaseConfig || !supabase) {
     return {
       status: "not-configured",
@@ -203,25 +214,32 @@ export async function markGroupsExported(groupIds: string[]): Promise<MarkExport
     };
   }
 
-  if (groupIds.length === 0) {
+  if (groups.length === 0) {
     return {
       status: "success",
       message: "更新対象はありません"
     };
   }
 
-  const { error: groupError } = await supabase
-    .from("photo_groups")
-    .update({
-      export_status: "exported"
-    })
-    .in("id", groupIds);
+  const exportedAt = new Date().toISOString();
+  const groupIds = groups.map((group) => group.groupId);
 
-  if (groupError) {
-    return {
-      status: "error",
-      message: groupError.message
-    };
+  for (const group of groups) {
+    const { error: groupError } = await supabase
+      .from("photo_groups")
+      .update({
+        export_status: "exported",
+        official_export_folder_path: group.officialExportFolderPath,
+        official_exported_at: exportedAt
+      })
+      .eq("id", group.groupId);
+
+    if (groupError) {
+      return {
+        status: "error",
+        message: groupError.message
+      };
+    }
   }
 
   const { data: itemData, error: itemError } = await supabase

@@ -34,6 +34,8 @@ export type SearchGroupResult = {
   export_status: SearchExportStatus;
   created_at: string | null;
   approved_at: string | null;
+  official_export_folder_path: string | null;
+  official_exported_at: string | null;
   photo_count: number;
   preview_photos: SearchGroupPhoto[];
 };
@@ -70,7 +72,9 @@ const searchGroupColumns = [
   "review_status",
   "export_status",
   "created_at",
-  "approved_at"
+  "approved_at",
+  "official_export_folder_path",
+  "official_exported_at"
 ].join(",");
 
 export async function searchPatientPhotoGroups(filters: SearchGroupFilters): Promise<SearchGroupsResult> {

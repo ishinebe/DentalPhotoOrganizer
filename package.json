@@ -1,8 +1,8 @@
 {
   "name": "dental-photo-organizer",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
-  "description": "DentalPhotoOrganizer Phase8-A patient photo search",
+  "description": "DentalPhotoOrganizer Phase8-B official export destination tracking",
   "main": "dist-electron/main.js",
   "type": "module",
   "scripts": {

@@ -33,7 +33,8 @@ import {
   fetchReadyExportGroups,
   markGroupsExported,
   type ExportGroup,
-  type ExportGroupPhoto
+  type ExportGroupPhoto,
+  type MarkExportedGroup
 } from "./lib/exportGroups";
 import { importPhotoMetadata, type ImportPhotosResult, type LocalImageFile } from "./lib/importPhotos";
 import {
@@ -192,8 +193,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 8-A</span>
-          <strong>検索画面実装</strong>
+          <span>Phase 8-B</span>
+          <strong>正式書き出し先記録</strong>
         </div>
       </aside>
 
@@ -616,6 +617,19 @@ function getExportFilename(photo: ExportGroupPhoto, index: number) {
   const extensionMatch = photo.original_filename.match(/\.[^.]+$/);
   const extension = extensionMatch?.[0].toLowerCase() ?? ".jpg";
   return `${String(index + 1).padStart(3, "0")}${extension}`;
+}
+
+function buildOfficialExportFolderPath(exportRootPath: string, group: ExportGroup) {
+  const separator = exportRootPath.includes("\\") ? "\\" : "/";
+  const root = exportRootPath.replace(/[\\/]+$/, "");
+  const shootingDate = sanitizeExportPathSegment(group.shooting_date || "date-unknown");
+  const patientId = sanitizeExportPathSegment(group.patient_id || "patient-unknown");
+  return [root, shootingDate, patientId].join(separator);
+}
+
+function sanitizeExportPathSegment(value: string) {
+  const sanitized = value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").trim();
+  return sanitized.length > 0 ? sanitized : "unknown";
 }
 
 function countExportPhotos(groups: ExportGroup[]) {
@@ -2049,7 +2063,13 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
       const copyResult = await window.electronAPI.exportPhotoFiles(copyPayload);
 
       if (copyResult.successGroupIds.length > 0) {
-        const markResult = await markGroupsExported(copyResult.successGroupIds);
+        const successfulGroups: MarkExportedGroup[] = groups
+          .filter((group) => copyResult.successGroupIds.includes(group.id))
+          .map((group) => ({
+            groupId: group.id,
+            officialExportFolderPath: buildOfficialExportFolderPath(exportRootPath, group)
+          }));
+        const markResult = await markGroupsExported(successfulGroups);
 
         if (markResult.status !== "success") {
           setActionStatus("書き出し失敗");
@@ -2088,6 +2108,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
           <div>
             <h2>書き出し</h2>
             <p>確認完了した写真を、患者ごとのフォルダへコピーします。元の写真は変更されません。</p>
+            <p>書き出し成功後、この患者の正式書き出し先として保存されます。</p>
           </div>
         </div>
 
@@ -2514,6 +2535,12 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
                     <dt>書き出し状態</dt>
                     <dd>{getExportStatusLabel(group.export_status)}</dd>
                   </div>
+                  <div>
+                    <dt>正式書き出し先</dt>
+                    <dd title={group.official_export_folder_path ?? undefined}>
+                      {group.official_export_folder_path ? "記録あり" : "未記録"}
+                    </dd>
+                  </div>
                 </dl>
                 <button
                   className="secondary-action-button"
@@ -2604,7 +2631,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.9.0 Phase 8-A</dd>
+            <dd>0.9.1 Phase 8-B</dd>
           </div>
           <div>
             <dt>構成</dt>
