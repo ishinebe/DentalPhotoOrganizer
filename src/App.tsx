@@ -37,6 +37,11 @@ import {
 } from "./lib/exportGroups";
 import { importPhotoMetadata, type ImportPhotosResult, type LocalImageFile } from "./lib/importPhotos";
 import {
+  searchPatientPhotoGroups,
+  type SearchGroupFilters,
+  type SearchGroupResult
+} from "./lib/searchGroups";
+import {
   completeReviewGroup,
   fetchReviewGroupsByStatus,
   fetchReviewGroupPhotos,
@@ -134,6 +139,17 @@ const emptyReviewForm: ReviewGroupForm = {
   notes: ""
 };
 
+const emptySearchFilters: SearchGroupFilters = {
+  patientId: "",
+  shootingDateFrom: "",
+  shootingDateTo: "",
+  doctor: "",
+  photographer: "",
+  photoProtocol: "",
+  reviewStatus: "",
+  exportStatus: ""
+};
+
 type ReviewOpenTarget = {
   groupId: string;
   status: ReviewGroupListStatus;
@@ -178,8 +194,8 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Phase 7-E1</span>
-          <strong>書き出し前確認UI</strong>
+          <span>Phase 8-A</span>
+          <strong>検索画面実装</strong>
         </div>
       </aside>
 
@@ -207,7 +223,14 @@ function App() {
               }}
             />
           )}
-          {activeView === "search" && <SearchView />}
+          {activeView === "search" && (
+            <SearchView
+              onOpenReview={(groupId, status) => {
+                setReviewOpenTarget({ groupId, status });
+                setActiveView("review");
+              }}
+            />
+          )}
           {activeView === "settings" && <SettingsView />}
         </section>
       </main>
@@ -634,7 +657,15 @@ function getReviewStatusDisplayLabel(status: string | null | undefined) {
     return "確認中";
   }
 
+  if (status === "rejected") {
+    return "差し戻し";
+  }
+
   return "未設定";
+}
+
+function getReviewOpenStatus(status: string | null | undefined): ReviewGroupListStatus {
+  return status === "approved" ? "approved" : "pending";
 }
 
 function formatGroupOption(group: ReviewGroup) {
@@ -2290,40 +2321,202 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
 }
 
 
-function SearchView() {
+function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: ReviewGroupListStatus) => void }) {
+  const [filters, setFilters] = useState<SearchGroupFilters>(emptySearchFilters);
+  const [results, setResults] = useState<SearchGroupResult[]>([]);
+  const [status, setStatus] = useState<"待機中" | "検索中" | "表示中" | "データなし" | "取得失敗" | "Supabase未設定">("待機中");
+  const [message, setMessage] = useState("条件を入力して検索してください");
+
+  const isSearching = status === "検索中";
+
+  const updateFilter = (field: keyof SearchGroupFilters, value: string) => {
+    setFilters((current) => ({
+      ...current,
+      [field]: value
+    }));
+  };
+
+  const handleSearch = async () => {
+    setStatus("検索中");
+    setMessage("患者ごとの写真を検索しています");
+
+    const result = await searchPatientPhotoGroups(filters);
+
+    if (result.status === "not-configured") {
+      setResults([]);
+      setStatus("Supabase未設定");
+      setMessage(result.message);
+      return;
+    }
+
+    if (result.status === "error") {
+      setResults([]);
+      setStatus("取得失敗");
+      setMessage(result.message);
+      return;
+    }
+
+    setResults(result.groups);
+    setStatus(result.groups.length > 0 ? "表示中" : "データなし");
+    setMessage(result.message);
+  };
+
+  const handleClear = () => {
+    setFilters(emptySearchFilters);
+    setResults([]);
+    setStatus("待機中");
+    setMessage("条件を入力して検索してください");
+  };
+
+  useEffect(() => {
+    void handleSearch();
+    // Initial load only; user changes are searched explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="search-layout">
       <section className="form-panel">
         <h2>検索条件</h2>
         <div className="search-grid">
           <label>
-            患者ID検索
-            <input placeholder="例: P-240015" />
+            患者ID
+            <input
+              value={filters.patientId}
+              onChange={(event) => updateFilter("patientId", event.target.value)}
+              placeholder="例: 0001"
+            />
           </label>
           <label>
-            撮影日検索
-            <input type="date" />
+            撮影日 From
+            <input
+              type="date"
+              value={filters.shootingDateFrom}
+              onChange={(event) => updateFilter("shootingDateFrom", event.target.value)}
+            />
           </label>
           <label>
-            担当医検索
-            <input placeholder="例: Dr. Nakamura" />
+            撮影日 To
+            <input
+              type="date"
+              value={filters.shootingDateTo}
+              onChange={(event) => updateFilter("shootingDateTo", event.target.value)}
+            />
           </label>
           <label>
-            撮影者検索
-            <input placeholder="例: M. Tanaka" />
+            担当医
+            <input
+              value={filters.doctor}
+              onChange={(event) => updateFilter("doctor", event.target.value)}
+              placeholder="名前またはID"
+            />
+          </label>
+          <label>
+            撮影者
+            <input
+              value={filters.photographer}
+              onChange={(event) => updateFilter("photographer", event.target.value)}
+              placeholder="名前またはID"
+            />
+          </label>
+          <label>
+            撮影方法
+            <select value={filters.photoProtocol} onChange={(event) => updateFilter("photoProtocol", event.target.value)}>
+              <option value="">すべて</option>
+              {photoProtocolDefinitions.map((protocol) => (
+                <option key={protocol.value} value={protocol.value}>
+                  {protocol.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            写真確認状態
+            <select value={filters.reviewStatus} onChange={(event) => updateFilter("reviewStatus", event.target.value)}>
+              <option value="">すべて</option>
+              <option value="pending">確認待ち</option>
+              <option value="approved">確認完了</option>
+            </select>
+          </label>
+          <label>
+            書き出し状態
+            <select value={filters.exportStatus} onChange={(event) => updateFilter("exportStatus", event.target.value)}>
+              <option value="">すべて</option>
+              <option value="not_exported">未書き出し</option>
+              <option value="ready_for_export">書き出し待ち</option>
+              <option value="exported">書き出し済み</option>
+            </select>
           </label>
         </div>
-        <button className="primary-button" type="button">
-          <Search size={18} />
-          検索
-        </button>
+        <div className="search-actions">
+          <button className="primary-button" type="button" onClick={handleSearch} disabled={isSearching}>
+            <Search size={18} />
+            検索
+          </button>
+          <button type="button" onClick={handleClear} disabled={isSearching}>
+            条件をクリア
+          </button>
+        </div>
+        <div className={`review-status ${status === "取得失敗" ? "error" : ""}`}>
+          <strong>{status}</strong>
+          <span>{message}</span>
+        </div>
       </section>
       <section className="results-panel">
-        <h2>検索結果</h2>
-        <div className="empty-result">
-          <Database size={28} />
-          <span>検索処理はダミー実装です</span>
+        <div className="column-title">
+          <h2>検索結果</h2>
+          <span>{results.length}件</span>
         </div>
+        {results.length > 0 ? (
+          <div className="search-result-list">
+            {results.map((group) => (
+              <article className="search-result-card" key={group.id}>
+                <div>
+                  <strong>{group.patient_id ?? "患者ID未設定"}</strong>
+                  <span>{group.photo_count}枚</span>
+                </div>
+                <dl>
+                  <div>
+                    <dt>撮影日</dt>
+                    <dd>{formatDate(group.shooting_date)}</dd>
+                  </div>
+                  <div>
+                    <dt>撮影方法</dt>
+                    <dd>{getPhotoProtocolLabel(group.photo_protocol)}</dd>
+                  </div>
+                  <div>
+                    <dt>担当医</dt>
+                    <dd>{group.doctor_name ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>撮影者</dt>
+                    <dd>{group.photographer_name ?? "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>写真確認状態</dt>
+                    <dd>{getReviewStatusDisplayLabel(group.review_status)}</dd>
+                  </div>
+                  <div>
+                    <dt>書き出し状態</dt>
+                    <dd>{getExportStatusLabel(group.export_status)}</dd>
+                  </div>
+                </dl>
+                <button
+                  className="secondary-action-button"
+                  type="button"
+                  onClick={() => onOpenReview(group.id, getReviewOpenStatus(group.review_status))}
+                >
+                  写真確認で開く
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-result">
+            <Database size={28} />
+            <span>{isSearching ? "検索中" : message}</span>
+          </div>
+        )}
       </section>
     </div>
   );
@@ -2360,7 +2553,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.8.8 Phase 7-E1</dd>
+            <dd>0.9.0 Phase 8-A</dd>
           </div>
           <div>
             <dt>構成</dt>

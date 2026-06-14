@@ -1626,6 +1626,65 @@ textarea:focus {
   gap: 14px;
 }
 
+.search-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.search-result-list {
+  display: grid;
+  gap: 12px;
+}
+
+.search-result-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #d8e3ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.search-result-card > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.search-result-card > div:first-child strong {
+  color: #101828;
+  font-size: 1rem;
+}
+
+.search-result-card > div:first-child span {
+  color: #1d6fba;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.search-result-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin: 0;
+}
+
+.search-result-card dt {
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.search-result-card dd {
+  margin: 3px 0 0;
+  color: #1d2939;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
 .empty-result {
   display: grid;
   place-items: center;
