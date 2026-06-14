@@ -23,6 +23,12 @@ DentalPhotoOrganizer は、口腔内写真を患者ごとに確認・整理し�
 
 README は現在地の概要です。詳細なプロダクト原則、用語、ワークフロー判断は `docs/` を優先してください。
 
+## ブランチ運用
+
+現在の開発作業は `master` ブランチで行います。
+
+GitHub の default branch が `main` の場合でも、最新実装は `origin/master` を確認してください。
+
 ## 現在の実装範囲
 
 - Dashboard の Supabase 実データ統計表示
@@ -173,8 +179,15 @@ Settings 画面では、取込元、保存先、確認必須設定、アプリ�
 
 - `supabase/schema.sql` は初期MVP時代のスキーマ定義を含みます。
 - 現行DBと完全には一致しない可能性があります。
-- 追加SQLは `supabase/phase*.sql` として段階的に管理しています。
+- DB変更を行う場合は、原則として `supabase/phase*.sql` を追加してください。
+- `supabase/schema.sql` を現行DBの完全な source of truth として扱わないでください。
 - 本番運用前には RLS、認証、権限設計を必ず行ってください。
+
+## Electron API 変更時の注意
+
+Electron preload 経由の API を追加・変更する場合は、`electron/preload.ts` だけでなく `scripts/write-preload.cjs` も確認してください。
+
+Renderer から直接 Node.js / `fs` API を呼び出さないでください。
 
 ## 設計方針
 
