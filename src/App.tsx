@@ -157,6 +157,9 @@ type ReviewOpenTarget = {
 function App() {
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [reviewOpenTarget, setReviewOpenTarget] = useState<ReviewOpenTarget | null>(null);
+  const clearReviewOpenTarget = useCallback(() => {
+    setReviewOpenTarget(null);
+  }, []);
 
   const title = useMemo(() => {
     return navItems.find((item) => item.id === activeView)?.label ?? "Dashboard";
@@ -213,7 +216,7 @@ function App() {
         <section className="content-area">
           {activeView === "dashboard" && <Dashboard />}
           {activeView === "import" && <Import />}
-          {activeView === "review" && <Review openTarget={reviewOpenTarget} />}
+          {activeView === "review" && <Review openTarget={reviewOpenTarget} onOpenTargetConsumed={clearReviewOpenTarget} />}
           {activeView === "export" && (
             <ExportView
               onOpenReview={(groupId) => {
@@ -812,7 +815,13 @@ function getPhotoSlotLabel(index: number) {
   return labels[index] ?? `写真${index + 1}`;
 }
 
-function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
+function Review({
+  openTarget,
+  onOpenTargetConsumed
+}: {
+  openTarget: ReviewOpenTarget | null;
+  onOpenTargetConsumed: () => void;
+}) {
   const [reviewListStatus, setReviewListStatus] = useState<ReviewGroupListStatus>("pending");
   const [groups, setGroups] = useState<ReviewGroup[]>([]);
   const [groupPhotos, setGroupPhotos] = useState<ReviewGroupPhoto[]>([]);
@@ -930,7 +939,13 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
 
     setReviewListStatus(openTarget.status);
     void loadGroups(openTarget.groupId, openTarget.status);
-  }, [loadGroups, openTarget]);
+    onOpenTargetConsumed();
+  }, [loadGroups, onOpenTargetConsumed, openTarget]);
+
+  const handleReviewListStatusChange = (status: ReviewGroupListStatus) => {
+    onOpenTargetConsumed();
+    setReviewListStatus(status);
+  };
 
   useEffect(() => {
     let isCurrent = true;
@@ -1410,7 +1425,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
         <button
           className={reviewListStatus === "pending" ? "active" : ""}
           type="button"
-          onClick={() => setReviewListStatus("pending")}
+          onClick={() => handleReviewListStatusChange("pending")}
           disabled={isBusy}
         >
           確認待ち
@@ -1418,7 +1433,7 @@ function Review({ openTarget }: { openTarget: ReviewOpenTarget | null }) {
         <button
           className={reviewListStatus === "approved" ? "active" : ""}
           type="button"
-          onClick={() => setReviewListStatus("approved")}
+          onClick={() => handleReviewListStatusChange("approved")}
           disabled={isBusy}
         >
           確認済み
