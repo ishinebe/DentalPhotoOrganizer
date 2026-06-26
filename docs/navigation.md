@@ -89,6 +89,19 @@ Read this when:
 Purpose:
 Defines project-specific terminology and prevents misunderstanding.
 
+### docs/shooting-method.md
+
+Read this when:
+
+- You are changing 撮影方法 selection.
+- You are changing `photo_protocol` or photo type definitions.
+- You are changing 5枚法 / 9枚法 / 14枚法 behavior.
+- You are changing 撮影基準チェック or missing-photo warnings.
+- You are unsure whether shooting method support is already implemented.
+
+Purpose:
+Defines the current shooting method implementation, its internal names, required photo types, and current limitations.
+
 ## Task-Based Reading Guide
 
 ## If modifying import behavior
@@ -149,16 +162,20 @@ Read in this order:
 2. docs/decisions.md
 3. docs/workflow.md
 4. docs/glossary.md
+5. docs/shooting-method.md, if the change involves 撮影方法, 写真タイプ, or 撮影基準チェック.
 
 Important concepts:
 
 - 写真確認
+- 患者情報・写真確認
 - 確認待ち
 - 確認済み
 - 要修正
 - 確認完了
 - 写真確認者
 - 別患者混入
+- 撮影方法
+- 撮影基準チェック
 
 Rules:
 
@@ -166,6 +183,39 @@ Rules:
 - Confirmation completion is not the same as export.
 - UI should use 確認完了 rather than 承認 for user-facing actions.
 - Even confirmed photo sets may be corrected before export if an error is found.
+- 撮影方法 / `photo_protocol` is already implemented and should not be treated as missing without checking docs/shooting-method.md and `src/lib/photoTypes.ts`.
+
+## If modifying shooting method or photo standard check
+
+Read in this order:
+
+1. docs/shooting-method.md
+2. docs/workflow.md
+3. docs/glossary.md
+4. docs/principles.md
+
+Important concepts:
+
+- 撮影方法
+- `photo_protocol`
+- 写真タイプ
+- `photo_type`
+- 撮影基準チェック
+- 5枚法
+- 9枚法
+- 14枚法
+- 部分撮影
+- その他
+
+Rules:
+
+- Use 「撮影方法」 in user-facing UI.
+- Use `photo_protocol` only for internal code or DB references.
+- Do not rename `photo_protocol` to `shooting_protocol` without a deliberate migration plan.
+- 5枚法 and 9枚法 required-photo checks are implemented.
+- 14枚法 is selectable and saved, but its detailed required-photo definition is not finalized.
+- 部分撮影 and その他 should not trigger missing-photo checks.
+- The check is assistive and must not replace human review.
 
 ## If modifying export behavior
 
@@ -261,11 +311,13 @@ Read in this order:
 
 Rules:
 
-- Use 写真確認 instead of レビュー in user-facing UI.
+- Use 患者情報・写真確認 as the main user-facing screen name when the review screen includes patient metadata registration and photo verification.
+- Use 写真確認 for the review action itself when that is more natural.
 - Use 書き出し instead of エクスポート in user-facing UI.
 - Use 確認完了 instead of 承認 in user-facing UI.
 - Use 患者, この患者の写真, or 患者ごとの写真 for user-facing UI when that is clearer than 患者写真セット.
 - Use 患者写真セット as an internal concept or documentation term when precision is needed.
+- Use 書き出す患者を選ぶ rather than 書き出し対象の患者 when describing the user's export selection action.
 - Do not use 患者セット, 撮影セット, or 統合先撮影セット in user-facing UI.
 - Avoid terms listed under Avoid in docs/glossary.md.
 - Do not rely on color alone to communicate important state.
@@ -277,6 +329,7 @@ Read in this order:
 1. docs/workflow.md
 2. docs/glossary.md
 3. docs/principles.md
+4. docs/shooting-method.md, if the change involves shooting method or photo type metadata.
 
 Important concepts:
 
@@ -293,7 +346,7 @@ Important concepts:
 Rules:
 
 - Patient ID, shooting date, attending doctor, and photographer are important search axes.
-- Shooting protocol and photo type may also become important search or filtering axes.
+- Shooting method and photo type may also become important search or filtering axes.
 - Photo review status and export status should be understandable to non-developer users.
 - 撮影日 is not the same as import date, export date, review date, or file modified date.
 - Patient ID should not be embedded into original image filenames.
@@ -337,6 +390,8 @@ The following rules must not be violated:
 10. Do not change user-facing terminology without checking docs/glossary.md.
 11. Do not treat exported as a permanent lock state.
 12. Do not silently delete or overwrite exported folders when implementing later additional export or re-export behavior.
+13. Do not treat shooting method checks as a replacement for human review.
+14. Do not assume 14枚法 completeness is implemented until its required-photo definition is finalized.
 
 ## Recommended Agent Workflow
 
