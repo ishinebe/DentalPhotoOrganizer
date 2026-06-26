@@ -15,7 +15,7 @@ DentalPhotoOrganizer supports the following workflow:
 5. Detect or estimate patient-related information when possible.
 6. Mark uncertain or incomplete groups as requiring human review.
 7. Let a human operator review each photo set.
-8. Correct patient, doctor, operator, or photo assignment information when needed.
+8. Correct patient, doctor, operator, shooting method, or photo assignment information when needed.
 9. Approve the photo set after review.
 10. Re-check approved photo sets before export.
 11. Export only after final human confirmation.
@@ -92,6 +92,9 @@ During review:
 - The user checks whether each photo set belongs to the same patient.
 - The user checks patient ID and related metadata.
 - The user checks attending doctor and operator information.
+- The user selects or verifies the shooting method.
+- The user checks and corrects photo type labels for individual photographs.
+- The user checks the photo standard check panel for missing required photo types, unclassified photos, and photos labeled as その他.
 - The user checks whether photographs are mixed with another patient’s photographs.
 - The user corrects errors before approval.
 - The user approves the photo set only after visual confirmation.
@@ -103,6 +106,37 @@ Important rules:
 - The user must be able to correct mistakes intuitively.
 - The user should not need to remember information across screens.
 - The interface should reduce cognitive load and decision fatigue.
+- Shooting method checks are assistive and must not replace human confirmation.
+
+## Shooting Method and Photo Standard Check
+
+The user-facing term is 「撮影方法」.
+
+The internal code and database field currently use `photo_protocol`.
+
+The patient information / photo review screen currently supports:
+
+- 5枚法
+- 9枚法
+- 14枚法
+- 部分撮影
+- その他
+
+5枚法 and 9枚法 have implemented required-photo checks.
+
+14枚法 is selectable and saved, but its detailed required-photo definition is not finalized yet.
+
+部分撮影 and その他 do not perform missing-photo checks.
+
+The photo standard check should show:
+
+- Whether required photo types for the selected shooting method may be missing.
+- Whether unclassified photos remain.
+- Whether photos labeled as その他 are present.
+
+The check is a review aid. It should guide the user to inspect the patient photographs, not automatically confirm or reject the group.
+
+For implementation details, read `docs/shooting-method.md`.
 
 ## Search Workflow
 
@@ -128,7 +162,7 @@ Recommended search result content:
 - Photo count.
 - Attending doctor.
 - Photographer.
-- Shooting protocol when available.
+- Shooting method when available.
 - Review status.
 - Export status.
 - A small row of representative thumbnails when available.
@@ -209,6 +243,8 @@ Examples:
 - Possible mixed-patient photo set.
 - Incomplete required metadata.
 - Export blocked because review is incomplete.
+- Missing required photo types for the selected shooting method.
+- Unclassified photo types during review.
 
 ## Design Implications
 
@@ -218,6 +254,7 @@ The workflow implies the following design requirements:
 - Users must be able to move from export back to review.
 - Review status and export status should be visible.
 - Patient ID, date, attending doctor, and operator should be searchable.
+- Shooting method and photo type should be visible where they help human review.
 - Search should remain focused on memorable clinical metadata rather than exposing every internal status as a filter.
 - Search results should support visual identification with small representative thumbnails when possible.
 - Search result actions should prioritize likely user intent: review for correction, exported-folder access for locating already exported files.
