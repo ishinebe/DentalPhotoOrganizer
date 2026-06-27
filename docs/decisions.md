@@ -180,7 +180,7 @@ DentalPhotoOrganizer manages only the official export destination configured for
 
 Design implications:
 - The application should record the official export destination it created or used.
-- Search should open or locate only the recorded official export destination.
+- Search should open only the recorded `official_export_folder_path`.
 - The application should not attempt to detect or track later copies to personal PCs, SD cards, USB drives, or other external locations.
 - Additional export should target the official export destination rather than arbitrary personal destinations.
 - Existing files in the official export destination must not be deleted or overwritten silently.

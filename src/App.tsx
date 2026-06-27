@@ -2361,6 +2361,8 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"待機中" | "検索中" | "表示中" | "データなし" | "取得失敗" | "Supabase未設定">("待機中");
   const [message, setMessage] = useState("条件を入力して検索してください");
+  const [openingFolderGroupId, setOpeningFolderGroupId] = useState<string | null>(null);
+  const [folderOpenError, setFolderOpenError] = useState<{ groupId: string; message: string } | null>(null);
 
   const isSearching = status === "検索中";
 
@@ -2374,6 +2376,7 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
   const handleSearch = async () => {
     setStatus("検索中");
     setMessage("患者ごとの写真を検索しています");
+    setFolderOpenError(null);
 
     const result = await searchPatientPhotoGroups(filters);
 
@@ -2401,6 +2404,38 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
     setResults([]);
     setStatus("待機中");
     setMessage("条件を入力して検索してください");
+    setFolderOpenError(null);
+  };
+
+  const handleOpenOfficialExportFolder = async (group: SearchGroupResult) => {
+    const folderPath = group.official_export_folder_path;
+    if (!folderPath || !window.electronAPI?.openOfficialExportFolder) {
+      setFolderOpenError({
+        groupId: group.id,
+        message: "正式書き出し先フォルダを開けませんでした。フォルダが移動または削除された可能性があります。"
+      });
+      return;
+    }
+
+    setOpeningFolderGroupId(group.id);
+    setFolderOpenError(null);
+
+    try {
+      const result = await window.electronAPI.openOfficialExportFolder(folderPath);
+      if (result.status === "error") {
+        setFolderOpenError({
+          groupId: group.id,
+          message: result.message
+        });
+      }
+    } catch {
+      setFolderOpenError({
+        groupId: group.id,
+        message: "正式書き出し先フォルダを開けませんでした。フォルダが移動または削除された可能性があります。"
+      });
+    } finally {
+      setOpeningFolderGroupId(null);
+    }
   };
 
   useEffect(() => {
@@ -2557,13 +2592,30 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
                     </dd>
                   </div>
                 </dl>
-                <button
-                  className="secondary-action-button"
-                  type="button"
-                  onClick={() => onOpenReview(group.id, getReviewOpenStatus(group.review_status))}
-                >
-                  患者情報を開く
-                </button>
+                <div className="search-result-actions">
+                  <button
+                    className="secondary-action-button"
+                    type="button"
+                    onClick={() => onOpenReview(group.id, getReviewOpenStatus(group.review_status))}
+                  >
+                    患者情報を開く
+                  </button>
+                  {group.official_export_folder_path && (
+                    <button
+                      className="secondary-action-button"
+                      type="button"
+                      onClick={() => void handleOpenOfficialExportFolder(group)}
+                      disabled={openingFolderGroupId === group.id}
+                    >
+                      {openingFolderGroupId === group.id ? "フォルダを開いています" : "正式書き出し先フォルダを開く"}
+                    </button>
+                  )}
+                </div>
+                {folderOpenError?.groupId === group.id && (
+                  <div className="search-result-error" role="alert">
+                    {folderOpenError.message}
+                  </div>
+                )}
               </article>
             ))}
           </div>

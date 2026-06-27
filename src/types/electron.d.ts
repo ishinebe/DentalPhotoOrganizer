@@ -17,6 +17,11 @@ export type ExportFolderSelectionResult = {
   folderPath: string | null;
 };
 
+export type OpenOfficialExportFolderResult = {
+  status: "success" | "error";
+  message: string;
+};
+
 export type ExportPhotoFilePayload = {
   photoId: string;
   originalPath: string | null;
@@ -58,6 +63,7 @@ declare global {
       selectImageFolder: () => Promise<ImageFolderSelectionResult>;
       loadImagePreview: (filePath: string) => Promise<ImagePreviewResult>;
       selectExportFolder: () => Promise<ExportFolderSelectionResult>;
+      openOfficialExportFolder: (folderPath: string) => Promise<OpenOfficialExportFolderResult>;
       exportPhotoFiles: (payload: ExportPhotoFilesPayload) => Promise<ExportPhotoFilesResult>;
     };
   }

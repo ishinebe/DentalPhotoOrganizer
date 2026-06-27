@@ -196,6 +196,50 @@ function registerIpcHandlers() {
     };
   });
 
+  ipcMain.handle("open-official-export-folder", async (_event, folderPath: string) => {
+    if (!folderPath || typeof folderPath !== "string") {
+      return {
+        status: "error",
+        message: "正式書き出し先フォルダを開けませんでした。フォルダが移動または削除された可能性があります。"
+      };
+    }
+
+    if (!existsSync(folderPath)) {
+      return {
+        status: "error",
+        message: "正式書き出し先フォルダを開けませんでした。フォルダが移動または削除された可能性があります。"
+      };
+    }
+
+    try {
+      const folderStat = await stat(folderPath);
+      if (!folderStat.isDirectory()) {
+        return {
+          status: "error",
+          message: "正式書き出し先フォルダを開けませんでした。フォルダが移動または削除された可能性があります。"
+        };
+      }
+
+      const openError = await shell.openPath(folderPath);
+      if (openError) {
+        return {
+          status: "error",
+          message: "正式書き出し先フォルダを開けませんでした。フォルダが移動または削除された可能性があります。"
+        };
+      }
+
+      return {
+        status: "success",
+        message: "正式書き出し先フォルダを開きました"
+      };
+    } catch {
+      return {
+        status: "error",
+        message: "正式書き出し先フォルダを開けませんでした。フォルダが移動または削除された可能性があります。"
+      };
+    }
+  });
+
   ipcMain.handle("export-photo-files", async (_event, payload: ExportPhotoFilesPayload) => {
     if (!isValidExportPayload(payload)) {
       return {

@@ -1737,6 +1737,22 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.search-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.search-result-error {
+  padding: 9px 10px;
+  border: 1px solid #f1b8b1;
+  border-radius: 8px;
+  color: #9b2c23;
+  background: #fff8f6;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .empty-result {
   display: grid;
   place-items: center;

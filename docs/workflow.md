@@ -180,7 +180,7 @@ Important rules:
 - Search must not bypass photo review.
 - Exported patients should still be searchable.
 - Search results should allow users to reopen the patient photographs in photo review.
-- Search results should eventually support opening the recorded exported folder when the exported location is known.
+- Search results should support opening the recorded exported folder when `official_export_folder_path` is known.
 - Do not infer or guess an exported folder path from naming rules alone.
 - Only show an open-folder action when a recorded export destination is available.
 - Keep search filters focused on the fields users naturally remember.
