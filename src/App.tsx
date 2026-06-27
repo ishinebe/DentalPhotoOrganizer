@@ -63,7 +63,14 @@ import { fetchStaffMembers, type StaffMember } from "./lib/staff";
 import { getSupabaseConnectionStatus } from "./lib/supabase";
 
 type View = "dashboard" | "import" | "review" | "export" | "search" | "settings";
-type ImportStatus = "未選択" | "フォルダ選択済み" | "対象ファイルなし" | "取込中" | "取込完了" | "取込失敗" | "Supabase未設定";
+type ImportStatus =
+  | "フォルダ未選択"
+  | "フォルダ選択済み"
+  | "対象ファイルなし"
+  | "取込中"
+  | "取込完了"
+  | "取込失敗"
+  | "Supabase未設定";
 type SupabaseStatus = "checking" | "success" | "failed" | "not-configured";
 type ReviewLoadStatus = "読み込み中" | "データなし" | "取得失敗" | "表示中" | "Supabase未設定";
 type ReviewActionStatus =
@@ -397,12 +404,11 @@ function SupabaseConnectionCard({ status, message }: { status: SupabaseStatus; m
 }
 
 function Import() {
-  const [status, setStatus] = useState<ImportStatus>("未選択");
+  const [status, setStatus] = useState<ImportStatus>("フォルダ未選択");
   const [folderPath, setFolderPath] = useState<string | null>(null);
   const [files, setFiles] = useState<LocalImageFile[]>([]);
   const [isSelectingFolder, setIsSelectingFolder] = useState(false);
   const [result, setResult] = useState<ImportPhotosResult | null>(null);
-  const electronApiType = typeof window.electronAPI;
   const isElectronApiConnected = typeof window.electronAPI?.selectImageFolder === "function";
 
   const canSelectFolder = isElectronApiConnected && !isSelectingFolder && status !== "取込中";
@@ -419,7 +425,7 @@ function Import() {
         insertedCount: 0,
         skippedCount: 0,
         failedCount: 1,
-        message: "Electron API未接続のためフォルダ選択を実行できません。Electronウィンドウで起動してください"
+        message: "フォルダ選択を利用できません。アプリのウィンドウで起動してください"
       });
       return;
     }
@@ -431,7 +437,7 @@ function Import() {
       const selection = await electronAPI.selectImageFolder();
 
       if (!selection || selection.canceled) {
-        setStatus("未選択");
+        setStatus("フォルダ未選択");
         setFolderPath(null);
         setFiles([]);
         return;
@@ -481,30 +487,29 @@ function Import() {
         <div className="panel-heading">
           <HardDriveDownload size={24} />
           <div>
-            <h2>ローカル画像メタデータ取込</h2>
-            <p>元画像ファイルはコピー・移動・リネームせず、参照情報のみ登録します。</p>
+            <h2>写真を取り込む</h2>
+            <p>元画像ファイルはコピー・移動・リネームせず、患者情報の確認に使う情報だけを登録します。</p>
           </div>
         </div>
 
         <div className="device-box">
           <div>
             <span>選択フォルダ</span>
-            <strong>{folderPath ?? "未選択"}</strong>
+            <strong>{folderPath ?? "フォルダ未選択"}</strong>
           </div>
           <button type="button" onClick={handleSelectFolder} disabled={!canSelectFolder}>
-            {isSelectingFolder ? "選択中" : "フォルダ選択"}
+            {isSelectingFolder ? "選択中" : "フォルダを選択"}
           </button>
         </div>
 
         <div className={isElectronApiConnected ? "api-diagnostic connected" : "api-diagnostic disconnected"}>
           <span className={isElectronApiConnected ? "status-dot ready" : "status-dot danger"} />
           <div>
-            <strong>{isElectronApiConnected ? "Electron API接続済み" : "Electron API未接続"}</strong>
-            <small>Electron API type: {electronApiType}</small>
+            <strong>{isElectronApiConnected ? "フォルダ選択の準備ができました" : "フォルダ選択を利用できません"}</strong>
             <p>
               {isElectronApiConnected
-                ? "preload 経由で window.electronAPI.selectImageFolder を利用できます"
-                : "ブラウザ単体ではフォルダ選択を実行できません。Electronウィンドウで起動してください"}
+                ? "画像フォルダを選択できます"
+                : "アプリのウィンドウで開くと、画像フォルダを選択できます"}
             </p>
           </div>
         </div>
@@ -516,7 +521,7 @@ function Import() {
           <button
             type="button"
             onClick={() => {
-              setStatus("未選択");
+              setStatus("フォルダ未選択");
               setFolderPath(null);
               setFiles([]);
               setResult(null);
@@ -535,7 +540,7 @@ function Import() {
           {files.length === 0 ? (
             <div className="empty-result compact">
               <ImageIcon size={24} />
-              <span>jpg / jpeg / png が見つかるとここに表示されます</span>
+              <span>対象画像が見つかるとここに表示されます</span>
             </div>
           ) : (
             <div className="file-list">
@@ -560,11 +565,11 @@ function Import() {
           <strong>{status}</strong>
         </div>
         <ul className="process-list">
-          <li>Electron経由でフォルダ選択</li>
-          <li>jpg / jpeg / png を抽出</li>
-          <li>SHA-256 file_hash を計算</li>
-          <li>QRコード検出結果をメタデータとして保存</li>
-          <li>photos テーブルへメタデータ登録</li>
+          <li>フォルダを選択</li>
+          <li>対象画像を読み込み</li>
+          <li>重複画像を確認</li>
+          <li>QRコードを解析</li>
+          <li>患者情報として登録</li>
         </ul>
         <div className="import-result">
           <h3>取込結果</h3>

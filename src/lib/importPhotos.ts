@@ -81,6 +81,6 @@ export async function importPhotoMetadata(files: LocalImageFile[]): Promise<Impo
     insertedCount,
     skippedCount,
     failedCount,
-    message: failedCount > 0 ? "一部の画像メタデータ登録に失敗しました" : "画像メタデータの登録が完了しました"
+    message: failedCount > 0 ? "一部の写真情報の登録に失敗しました" : "写真情報の登録が完了しました"
   };
 }
