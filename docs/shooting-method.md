@@ -33,7 +33,7 @@ Current implementation includes:
 - Photo type labels for each photo, stored as `photos.photo_type`.
 - Photo type select candidates filtered by the selected shooting method.
 - A 「撮影基準チェック」 panel for the selected patient photo group.
-- Required-photo checks for 5-view and 9-view methods.
+- Required-photo checks for 5-view, 9-view, and 14-view methods.
 - Warning display for missing required photo types.
 - Warning display for unclassified photos.
 - Warning display for photos labeled as その他.
@@ -46,9 +46,9 @@ The current internal values are:
 
 | UI label | Internal value | Required-photo check |
 | --- | --- | --- |
-| 5枚法 | `five_view` | Implemented |
-| 9枚法 | `nine_view` | Implemented |
-| 14枚法 | `fourteen_view` | Not yet defined in detail |
+| 5枚法 | `five_view` | Defined |
+| 9枚法 | `nine_view` | Defined |
+| 14枚法 | `fourteen_view` | Defined |
 | 部分撮影 | `partial` | No missing-photo check |
 | その他 | `other` | No missing-photo check |
 
@@ -56,43 +56,42 @@ The default shooting method is `five_view`.
 
 ---
 
-## Required photo types
+## Formal photo type master
+
+Photo type labels include clinical photo labels and auxiliary labels.
+
+Clinical photo labels are used for shooting method completeness checks.
+Auxiliary labels are available for management and review but are not counted as required clinical photos.
+
+### Auxiliary labels
+
+These labels may be available as selectable photo types where appropriate, but they are not required photo types for 5枚法, 9枚法, or 14枚法.
+
+- QR
+- その他
+- 未分類
+
+Important:
+QR is a management image, not a component of 5枚法, 9枚法, or 14枚法.
+
+---
+
+## Required clinical photo types
 
 ### 5枚法
 
-The current required photo types are:
+Required clinical photo types:
 
 - 正面観
+- 右側方面観
+- 左側方面観
 - 上顎咬合面観
 - 下顎咬合面観
 
 ### 9枚法
 
-The current required photo types are the 5枚法 types plus:
+Required clinical photo types:
 
-- 右側方面観
-- 左側方面観
-
-### 14枚法
-
-14枚法 is selectable and saved, but the detailed required-photo definition is not finalized yet.
-
-The UI should explain that 14枚法 detailed checking is future work rather than pretending that the check is complete.
-
-### 部分撮影 / その他
-
-For 部分撮影 and その他, the application should not perform a missing-photo check.
-
-These values are used when the standard 5枚法 or 9枚法 completeness expectation is not appropriate.
-
----
-
-## Photo type values
-
-The current photo type labels include:
-
-- 未分類
-- QR
 - 正面観
 - 右側方面観
 - 左側方面観
@@ -102,15 +101,92 @@ The current photo type labels include:
 - 上顎左側臼歯部
 - 下顎右側臼歯部
 - 下顎左側臼歯部
+
+### 14枚法
+
+Required clinical photo types:
+
+- 正面観
+- 右側方面観
+- 左側方面観
+- 上顎咬合面観
+- 下顎咬合面観
+- 上顎前歯部
+- 下顎前歯部
+- 上顎右側臼歯部
+- 上顎左側臼歯部
+- 下顎右側臼歯部
+- 下顎左側臼歯部
+- 右側臼歯部咬合面観
+- 左側臼歯部咬合面観
+- 前歯部咬合状態
+
+### 部分撮影 / その他
+
+For 部分撮影 and その他, the application should not perform a missing-photo check.
+
+These values are used when the standard 5枚法, 9枚法, or 14枚法 completeness expectation is not appropriate.
+
+---
+
+## Photo type select candidates
+
+Photo type select candidates should be generated from the selected shooting method.
+
+The select candidates should include:
+
+1. the required clinical photo types for the selected shooting method, and
+2. the auxiliary labels that are appropriate for review: QR, その他, 未分類.
+
+### 5枚法 candidates
+
+- 正面観
+- 右側方面観
+- 左側方面観
+- 上顎咬合面観
+- 下顎咬合面観
+- QR
 - その他
+- 未分類
 
-These are photo-level labels and should not be confused with the group-level shooting method.
+### 9枚法 candidates
 
-Photo type select candidates are filtered by shooting method:
+- 正面観
+- 右側方面観
+- 左側方面観
+- 上顎咬合面観
+- 下顎咬合面観
+- 上顎右側臼歯部
+- 上顎左側臼歯部
+- 下顎右側臼歯部
+- 下顎左側臼歯部
+- QR
+- その他
+- 未分類
 
-- 5枚法: QR, 正面観, 上顎咬合面観, 下顎咬合面観, その他.
-- 9枚法: QR, 正面観, 右側方面観, 左側方面観, 上顎咬合面観, 下顎咬合面観, その他.
-- 14枚法, 部分撮影, その他: all standard photo type candidates.
+### 14枚法 candidates
+
+- 正面観
+- 右側方面観
+- 左側方面観
+- 上顎咬合面観
+- 下顎咬合面観
+- 上顎前歯部
+- 下顎前歯部
+- 上顎右側臼歯部
+- 上顎左側臼歯部
+- 下顎右側臼歯部
+- 下顎左側臼歯部
+- 右側臼歯部咬合面観
+- 左側臼歯部咬合面観
+- 前歯部咬合状態
+- QR
+- その他
+- 未分類
+
+### 部分撮影 / その他 candidates
+
+For 部分撮影 and その他, the UI may show all standard photo type candidates because the expected set is intentionally non-standard.
 
 If existing saved data contains a photo type that is outside the current shooting method candidates, the UI should keep that current value visible so the user can review or correct it without losing data.
 
@@ -149,7 +225,7 @@ Current code references:
 - `src/lib/photoTypes.ts`
   - photo type definitions
   - shooting method definitions
-  - required photo type definitions for 5枚法 and 9枚法
+  - required photo type definitions for 5枚法, 9枚法, and 14枚法
   - shooting-method-specific photo type candidates
 - `src/lib/reviewGroups.ts`
   - `photo_protocol` in `ReviewGroup` and `ReviewGroupForm`
@@ -168,5 +244,5 @@ Current code references:
 - Do not rename `photo_protocol` to `shooting_protocol` without a deliberate migration plan.
 - Do not treat `supabase/schema.sql` as the complete source of truth for current DB state.
 - Do not mark a photo group as confirmed only because the shooting method check passes.
-- Do not block all partial or non-standard photo sets just because they do not match 5枚法 or 9枚法.
-- Do not assume 14枚法 completeness is implemented until its required-photo definition is finalized.
+- Do not block all partial or non-standard photo sets just because they do not match 5枚法, 9枚法, or 14枚法.
+- Do not treat QR as a required clinical photo for 5枚法, 9枚法, or 14枚法.
