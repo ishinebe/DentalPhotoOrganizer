@@ -31,6 +31,7 @@ Current implementation includes:
 - A 「撮影方法」 select control in the patient information / photo review screen.
 - Saving the selected method to `photo_groups.photo_protocol`.
 - Photo type labels for each photo, stored as `photos.photo_type`.
+- Photo type select candidates filtered by the selected shooting method.
 - A 「撮影基準チェック」 panel for the selected patient photo group.
 - Required-photo checks for 5-view and 9-view methods.
 - Warning display for missing required photo types.
@@ -62,8 +63,6 @@ The default shooting method is `five_view`.
 The current required photo types are:
 
 - 正面観
-- 右側方面観
-- 左側方面観
 - 上顎咬合面観
 - 下顎咬合面観
 
@@ -71,10 +70,8 @@ The current required photo types are:
 
 The current required photo types are the 5枚法 types plus:
 
-- 上顎右側臼歯部
-- 上顎左側臼歯部
-- 下顎右側臼歯部
-- 下顎左側臼歯部
+- 右側方面観
+- 左側方面観
 
 ### 14枚法
 
@@ -108,6 +105,14 @@ The current photo type labels include:
 - その他
 
 These are photo-level labels and should not be confused with the group-level shooting method.
+
+Photo type select candidates are filtered by shooting method:
+
+- 5枚法: QR, 正面観, 上顎咬合面観, 下顎咬合面観, その他.
+- 9枚法: QR, 正面観, 右側方面観, 左側方面観, 上顎咬合面観, 下顎咬合面観, その他.
+- 14枚法, 部分撮影, その他: all standard photo type candidates.
+
+If existing saved data contains a photo type that is outside the current shooting method candidates, the UI should keep that current value visible so the user can review or correct it without losing data.
 
 ---
 
@@ -145,6 +150,7 @@ Current code references:
   - photo type definitions
   - shooting method definitions
   - required photo type definitions for 5枚法 and 9枚法
+  - shooting-method-specific photo type candidates
 - `src/lib/reviewGroups.ts`
   - `photo_protocol` in `ReviewGroup` and `ReviewGroupForm`
   - reading and saving `photo_groups.photo_protocol`

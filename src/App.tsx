@@ -21,12 +21,12 @@ import {
   defaultPhotoProtocol,
   getPhotoProtocolDefinition,
   getPhotoProtocolLabel,
+  getSelectablePhotoTypeOptionsForProtocol,
   getPhotoTypeLabel,
   getPhotoTypeOrder,
   isPhotoProtocolValue,
   isPhotoTypeValue,
   photoProtocolDefinitions,
-  photoTypeOptions,
   type PhotoTypeValue
 } from "./lib/photoTypes";
 import {
@@ -1606,7 +1606,7 @@ function Review({
                   onChange={(event) => updatePhotoTypeDraft(selectedPhoto.id, event.target.value)}
                   disabled={isBusy || isApprovedMode}
                 >
-                  {photoTypeOptions.map((option) => (
+                  {getSelectablePhotoTypeOptionsForProtocol(form.photo_protocol, getDraftPhotoType(selectedPhoto)).map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -1640,7 +1640,7 @@ function Review({
                       onChange={(event) => updatePhotoTypeDraft(photo.id, event.target.value)}
                       disabled={isBusy || isApprovedMode}
                     >
-                      {photoTypeOptions.map((option) => (
+                      {getSelectablePhotoTypeOptionsForProtocol(form.photo_protocol, getDraftPhotoType(photo)).map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>

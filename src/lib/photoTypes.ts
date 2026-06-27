@@ -25,7 +25,9 @@ export const photoTypeDisplayOrder = photoTypeDefinitions
   .sort((a, b) => a.displayOrder - b.displayOrder)
   .map((definition) => definition.value);
 
-export const fiveViewRequiredPhotoTypes: PhotoTypeValue[] = [
+export const fiveViewRequiredPhotoTypes: PhotoTypeValue[] = ["front", "upper_occlusal", "lower_occlusal"];
+
+export const nineViewRequiredPhotoTypes: PhotoTypeValue[] = [
   "front",
   "right_buccal",
   "left_buccal",
@@ -33,13 +35,23 @@ export const fiveViewRequiredPhotoTypes: PhotoTypeValue[] = [
   "lower_occlusal"
 ];
 
-export const nineViewRequiredPhotoTypes: PhotoTypeValue[] = [
-  ...fiveViewRequiredPhotoTypes,
+const standardSelectablePhotoTypes: PhotoTypeValue[] = [
+  "qr",
+  "front",
+  "right_buccal",
+  "left_buccal",
+  "upper_occlusal",
+  "lower_occlusal",
   "upper_right_buccal",
   "upper_left_buccal",
   "lower_right_buccal",
-  "lower_left_buccal"
+  "lower_left_buccal",
+  "other"
 ];
+
+export const fiveViewSelectablePhotoTypes: PhotoTypeValue[] = ["qr", ...fiveViewRequiredPhotoTypes, "other"];
+export const nineViewSelectablePhotoTypes: PhotoTypeValue[] = ["qr", ...nineViewRequiredPhotoTypes, "other"];
+export const allStandardSelectablePhotoTypes: PhotoTypeValue[] = standardSelectablePhotoTypes;
 
 export type PhotoProtocolValue = "five_view" | "nine_view" | "fourteen_view" | "partial" | "other";
 
@@ -47,34 +59,40 @@ export type PhotoProtocolDefinition = {
   value: PhotoProtocolValue;
   label: string;
   requiredPhotoTypes: PhotoTypeValue[];
+  selectablePhotoTypes: PhotoTypeValue[];
 };
 
 export const photoProtocolDefinitions: PhotoProtocolDefinition[] = [
   {
     value: "five_view",
     label: "5枚法",
-    requiredPhotoTypes: fiveViewRequiredPhotoTypes
+    requiredPhotoTypes: fiveViewRequiredPhotoTypes,
+    selectablePhotoTypes: fiveViewSelectablePhotoTypes
   },
   {
     value: "nine_view",
     label: "9枚法",
-    requiredPhotoTypes: nineViewRequiredPhotoTypes
+    requiredPhotoTypes: nineViewRequiredPhotoTypes,
+    selectablePhotoTypes: nineViewSelectablePhotoTypes
   },
   {
     value: "fourteen_view",
     label: "14枚法",
-    requiredPhotoTypes: []
+    requiredPhotoTypes: [],
+    selectablePhotoTypes: allStandardSelectablePhotoTypes
     // TODO: Define required photo types after the 14-view protocol is finalized.
   },
   {
     value: "partial",
     label: "部分撮影",
-    requiredPhotoTypes: []
+    requiredPhotoTypes: [],
+    selectablePhotoTypes: allStandardSelectablePhotoTypes
   },
   {
     value: "other",
     label: "その他",
-    requiredPhotoTypes: []
+    requiredPhotoTypes: [],
+    selectablePhotoTypes: allStandardSelectablePhotoTypes
   }
 ];
 
@@ -113,4 +131,23 @@ export function getPhotoProtocolDefinition(value: string | null | undefined) {
 
 export function getRequiredPhotoTypes(value: string | null | undefined) {
   return getPhotoProtocolDefinition(value).requiredPhotoTypes;
+}
+
+export function getSelectablePhotoTypeOptionsForProtocol(
+  protocolValue: string | null | undefined,
+  currentPhotoType?: string | null
+) {
+  const selectableValues = [...getPhotoProtocolDefinition(protocolValue).selectablePhotoTypes];
+
+  if (isPhotoTypeValue(currentPhotoType) && !selectableValues.includes(currentPhotoType)) {
+    selectableValues.push(currentPhotoType);
+  }
+
+  return selectableValues
+    .slice()
+    .sort((a, b) => getPhotoTypeOrder(a) - getPhotoTypeOrder(b))
+    .map((value) => ({
+      value,
+      label: getPhotoTypeLabel(value)
+    }));
 }
