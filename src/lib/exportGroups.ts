@@ -134,7 +134,7 @@ export async function fetchReadyExportGroups(): Promise<ExportGroupsResult> {
     return {
       status: "success",
       groups: [],
-      message: "書き出し対象の患者はありません"
+      message: "書き出す患者がありません"
     };
   }
 

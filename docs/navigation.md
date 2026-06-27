@@ -317,7 +317,7 @@ Rules:
 - Use 確認完了 instead of 承認 in user-facing UI.
 - Use 患者, この患者の写真, or 患者ごとの写真 for user-facing UI when that is clearer than 患者写真セット.
 - Use 患者写真セット as an internal concept or documentation term when precision is needed.
-- Use 書き出す患者を選ぶ rather than 書き出し対象の患者 when describing the user's export selection action.
+- Use 書き出す患者を選ぶ when describing the user's export selection action.
 - Do not use 患者セット, 撮影セット, or 統合先撮影セット in user-facing UI.
 - Avoid terms listed under Avoid in docs/glossary.md.
 - Do not rely on color alone to communicate important state.

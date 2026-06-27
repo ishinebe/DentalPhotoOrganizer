@@ -103,7 +103,7 @@ const emptyStats = {
 const navItems: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "dashboard", label: "ホーム", icon: Gauge },
   { id: "import", label: "写真取込", icon: FolderDown },
-  { id: "review", label: "写真確認", icon: ClipboardCheck },
+  { id: "review", label: "患者情報・写真確認", icon: ClipboardCheck },
   { id: "export", label: "書き出し", icon: HardDriveDownload },
   { id: "search", label: "写真検索", icon: Search },
   { id: "settings", label: "設定", icon: Settings }
@@ -1728,7 +1728,7 @@ function Review({
 
       <aside className="metadata-column">
         <div className="column-title">
-          <h2>写真確認</h2>
+          <h2>患者情報・写真確認</h2>
           <span>{actionStatus}</span>
         </div>
         <form className="metadata-form">
@@ -2129,7 +2129,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
 
         <div className="export-metrics">
           <article>
-            <span>書き出し対象の患者</span>
+            <span>書き出す患者を選ぶ</span>
             <strong>{groups.length.toLocaleString()}件</strong>
           </article>
           <article>
@@ -2260,10 +2260,10 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
             <div className="export-preview-header">
               <div>
                 <strong>この患者の写真</strong>
-                <p>写真の移動や分類修正が必要な場合は、写真確認画面に戻って修正します。</p>
+                <p>写真の移動や分類修正が必要な場合は、患者情報・写真確認画面に戻って修正します。</p>
               </div>
               <button type="button" onClick={() => onOpenReview(selectedGroup.id)}>
-                写真確認に戻る
+                患者情報・写真確認に戻る
               </button>
             </div>
             <div className="export-photo-strip">
@@ -2323,7 +2323,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
 
       <aside className="export-target-panel">
         <div className="column-title">
-          <h2>書き出し対象の患者</h2>
+          <h2>書き出す患者を選ぶ</h2>
           <span>{groups.length}件</span>
         </div>
         <div className="export-target-list">
@@ -2562,7 +2562,7 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
                   type="button"
                   onClick={() => onOpenReview(group.id, getReviewOpenStatus(group.review_status))}
                 >
-                  写真確認で開く
+                  患者情報を開く
                 </button>
               </article>
             ))}
