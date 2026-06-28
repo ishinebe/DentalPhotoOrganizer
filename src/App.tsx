@@ -852,6 +852,8 @@ function Review({
     () => sortPhotosForDisplay(groupPhotos, (photo) => photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo)),
     [groupPhotos, photoTypeDrafts]
   );
+  const intraoralPhotos = useMemo(() => sortedGroupPhotos.filter((photo) => !isQrPhoto(photo)), [sortedGroupPhotos]);
+  const qrPhotos = useMemo(() => sortedGroupPhotos.filter((photo) => isQrPhoto(photo)), [sortedGroupPhotos]);
   const selectedPhotoProtocol = useMemo(() => getPhotoProtocolDefinition(form.photo_protocol), [form.photo_protocol]);
   const photoTypeCheck = useMemo(() => {
     const counts = new Map<PhotoTypeValue, number>();
@@ -872,7 +874,11 @@ function Review({
       unclassifiedCount: counts.get("unclassified") ?? 0
     };
   }, [groupPhotos, photoTypeDrafts, selectedPhotoProtocol]);
-  const selectedPhoto = groupPhotos.find((photo) => photo.id === selectedPhotoId) ?? sortedGroupPhotos[0] ?? null;
+  const selectedPhoto = intraoralPhotos.find((photo) => photo.id === selectedPhotoId) ?? intraoralPhotos[0] ?? null;
+  const selectedPhotoIndex = selectedPhoto ? intraoralPhotos.findIndex((photo) => photo.id === selectedPhoto.id) : -1;
+  const selectedPhotoPosition = selectedPhotoIndex >= 0 ? `${selectedPhotoIndex + 1} / ${intraoralPhotos.length}` : `0 / ${intraoralPhotos.length}`;
+  const canGoToPreviousPhoto = selectedPhotoIndex > 0;
+  const canGoToNextPhoto = selectedPhotoIndex >= 0 && selectedPhotoIndex < intraoralPhotos.length - 1;
   const selectedPatientCandidate = getGroupPatientCandidate(selectedGroup);
   const selectedAttentionReasons = getAttentionReasonText(selectedGroup);
   const otherGroups = useMemo(
@@ -886,6 +892,20 @@ function Review({
   );
   const isApprovedMode = reviewListStatus === "approved";
   const canReturnToPending = Boolean(selectedGroup && selectedGroup.review_status === "approved" && selectedGroup.export_status !== "exported");
+
+  const selectPhotoByOffset = useCallback(
+    (offset: number) => {
+      if (selectedPhotoIndex < 0 || intraoralPhotos.length === 0) {
+        return;
+      }
+
+      const nextIndex = Math.min(Math.max(selectedPhotoIndex + offset, 0), intraoralPhotos.length - 1);
+      if (nextIndex !== selectedPhotoIndex) {
+        setSelectedPhotoId(intraoralPhotos[nextIndex].id);
+      }
+    },
+    [intraoralPhotos, selectedPhotoIndex]
+  );
 
   const loadGroups = useCallback(async (preferredGroupId?: string | null, statusOverride?: ReviewGroupListStatus) => {
     const targetStatus = statusOverride ?? reviewListStatus;
@@ -1105,6 +1125,30 @@ function Review({
       Object.fromEntries(groupPhotos.map((photo) => [photo.id, getInitialPhotoType(photo)])) as Record<string, PhotoTypeValue>
     );
   }, [groupPhotos]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+        return;
+      }
+
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement instanceof HTMLSelectElement ||
+        activeElement?.getAttribute("contenteditable") === "true"
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      selectPhotoByOffset(event.key === "ArrowLeft" ? -1 : 1);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectPhotoByOffset]);
 
   const getDraftPhotoType = (photo: ReviewGroupPhoto) => photoTypeDrafts[photo.id] ?? getInitialPhotoType(photo);
 
@@ -1546,9 +1590,7 @@ function Review({
               </dl>
               <div className="photo-type-check-panel">
                 <strong>撮影基準チェック</strong>
-                {selectedPhotoProtocol.value === "fourteen_view" ? (
-                  <p className="photo-type-check-message">14枚法の詳細チェックは今後対応予定です。撮影方法は保存されています。</p>
-                ) : selectedPhotoProtocol.value === "partial" ? (
+                {selectedPhotoProtocol.value === "partial" ? (
                   <p className="photo-type-check-message">部分撮影として確認します。不足判定は行いません。</p>
                 ) : selectedPhotoProtocol.value === "other" ? (
                   <p className="photo-type-check-message">その他の撮影方法として確認します。不足判定は行いません。</p>
@@ -1585,10 +1627,46 @@ function Review({
                 )}
               </div>
             </section>
-            <div className={`preview-frame ${previewStatus === "表示中" ? "ready" : ""}`}>
-              {isQrPhoto(selectedPhoto) && <span className="preview-type-badge">QR画像</span>}
-              {previewStatus === "表示中" && previewDataUrl ? (
+            <div className={`preview-frame ${previewStatus === "表示中" && selectedPhoto ? "ready" : ""}`}>
+              {selectedPhoto && intraoralPhotos.length > 1 && (
+                <>
+                  <button
+                    aria-label="前の写真"
+                    className="preview-nav-button previous"
+                    disabled={!canGoToPreviousPhoto}
+                    onClick={() => selectPhotoByOffset(-1)}
+                    type="button"
+                  >
+                    ←
+                  </button>
+                  <button
+                    aria-label="次の写真"
+                    className="preview-nav-button next"
+                    disabled={!canGoToNextPhoto}
+                    onClick={() => selectPhotoByOffset(1)}
+                    type="button"
+                  >
+                    →
+                  </button>
+                  <span className="preview-position">{selectedPhotoPosition}</span>
+                </>
+              )}
+              {selectedPhoto ? (
+                previewStatus === "表示中" && previewDataUrl ? (
                 <img src={previewDataUrl} alt={selectedPhoto?.original_filename ?? "preview"} className="review-preview-image" />
+                ) : (
+                  <div className="preview-placeholder">
+                    <ImageIcon size={36} />
+                    <strong>{previewStatus}</strong>
+                    <span>{previewMessage}</span>
+                  </div>
+                )
+              ) : groupPhotos.length > 0 ? (
+                <div className="preview-placeholder">
+                  <ImageIcon size={36} />
+                  <strong>表示できる口腔内写真がありません</strong>
+                  <span>QR画像は補助情報から確認できます</span>
+                </div>
               ) : (
                 <div className="preview-placeholder">
                   <ImageIcon size={36} />
@@ -1616,7 +1694,7 @@ function Review({
             )}
 
             <div className="group-photo-grid">
-              {sortedGroupPhotos.map((photo) => (
+              {intraoralPhotos.map((photo) => (
                 <article
                   key={photo.id}
                   className={selectedPhoto?.id === photo.id ? "group-photo-card active" : "group-photo-card"}
@@ -1628,7 +1706,6 @@ function Review({
                     ) : (
                       <ImageIcon size={18} />
                     )}
-                    {isQrPhoto(photo) && <em>QR</em>}
                   </span>
                   <strong>{getPhotoTypeLabel(getDraftPhotoType(photo))}</strong>
                   <span>{photo.original_filename}</span>
@@ -1649,13 +1726,54 @@ function Review({
                   </label>
                 </article>
               ))}
-              {groupPhotos.length === 0 && (
+              {groupPhotos.length === 0 ? (
                 <div className="empty-result compact">
                   <ImageIcon size={24} />
                   <span>この患者には写真がありません</span>
                 </div>
-              )}
+              ) : intraoralPhotos.length === 0 ? (
+                <div className="empty-result compact">
+                  <ImageIcon size={24} />
+                  <span>表示できる口腔内写真がありません</span>
+                </div>
+              ) : null}
             </div>
+            {qrPhotos.length > 0 && (
+              <details className="qr-auxiliary-panel">
+                <summary>QR画像（補助情報） {qrPhotos.length}枚</summary>
+                <div className="qr-auxiliary-list">
+                  {qrPhotos.map((photo) => (
+                    <article key={photo.id} className="qr-auxiliary-card">
+                      <span className="group-photo-thumb">
+                        {photoThumbnailUrls[photo.id] ? (
+                          <img src={photoThumbnailUrls[photo.id]} alt={photo.original_filename} />
+                        ) : (
+                          <ImageIcon size={18} />
+                        )}
+                        <em>QR</em>
+                      </span>
+                      <div className="qr-auxiliary-meta">
+                        <strong>{photo.original_filename}</strong>
+                        <label className="photo-type-select">
+                          撮影種別
+                          <select
+                            value={getDraftPhotoType(photo)}
+                            onChange={(event) => updatePhotoTypeDraft(photo.id, event.target.value)}
+                            disabled={isBusy || isApprovedMode}
+                          >
+                            {getSelectablePhotoTypeOptionsForProtocol(form.photo_protocol, getDraftPhotoType(photo)).map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </details>
+            )}
             {selectedPhoto && (
               <section className="selected-photo-summary">
                 <h3>選択中の写真</h3>
@@ -2223,9 +2341,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
             {selectedExportPhotoTypeCheck && (
               <div className="export-photo-check-panel">
                 <strong>撮影基準チェック</strong>
-                {selectedExportPhotoTypeCheck.protocol.value === "fourteen_view" ? (
-                  <p className="photo-type-check-message">14枚法の詳細チェックは今後対応予定です。撮影方法は保存されています。</p>
-                ) : selectedExportPhotoTypeCheck.protocol.value === "partial" ? (
+                {selectedExportPhotoTypeCheck.protocol.value === "partial" ? (
                   <p className="photo-type-check-message">部分撮影として確認します。不足判定は行いません。</p>
                 ) : selectedExportPhotoTypeCheck.protocol.value === "other" ? (
                   <p className="photo-type-check-message">その他の撮影方法として確認します。不足判定は行いません。</p>
