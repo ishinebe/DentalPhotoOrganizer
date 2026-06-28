@@ -135,7 +135,7 @@ export async function approveReviewPhoto(photoId: string): Promise<ReviewPhotoMu
     return {
       status: "not-configured",
       photo: null,
-      message: "Supabase未設定のため承認できません"
+      message: "Supabase未設定のため確認完了にできません"
     };
   }
 
@@ -163,7 +163,7 @@ export async function approveReviewPhoto(photoId: string): Promise<ReviewPhotoMu
   return {
     status: "success",
     photo: data as unknown as ReviewPhoto,
-    message: "写真を承認しました"
+    message: "写真を確認完了にしました"
   };
 }
 

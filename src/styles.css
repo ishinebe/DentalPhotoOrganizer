@@ -660,13 +660,13 @@ h3 {
 }
 
 .review-guidance {
-  padding: 12px 14px;
+  padding: 10px 13px;
   border: 1px solid #d8e3ee;
   border-radius: 8px;
   color: #344054;
   background: #f8fbff;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: 0.86rem;
+  line-height: 1.45;
 }
 
 .review-mode-tabs {
@@ -840,8 +840,8 @@ h3 {
 
 .set-overview {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 8px;
+  padding: 11px 12px;
   border: 1px solid #d9e3ef;
   border-radius: 8px;
   background: #ffffff;
@@ -865,9 +865,9 @@ h3 {
 }
 
 .set-overview-header p {
-  margin-top: 3px;
+  margin-top: 2px;
   color: #475467;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
 }
 
 .set-overview-header strong {
@@ -887,13 +887,13 @@ h3 {
 .set-overview dl {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 9px;
+  gap: 7px;
   margin: 0;
 }
 
 .set-overview dl div {
   min-width: 0;
-  padding: 9px 10px;
+  padding: 7px 8px;
   border: 1px solid #edf2f7;
   border-radius: 8px;
   background: #f8fbfe;
@@ -906,10 +906,10 @@ h3 {
 }
 
 .set-overview dd {
-  margin: 3px 0 0;
+  margin: 2px 0 0;
   overflow-wrap: anywhere;
   color: #1d2939;
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   font-weight: 700;
 }
 
@@ -1091,6 +1091,11 @@ h3 {
   background: #fbfdff;
 }
 
+.confirmation-section {
+  border-color: #b8d7f4;
+  background: #f5faff;
+}
+
 .metadata-section h3 {
   margin: 0;
   color: #12283f;
@@ -1106,7 +1111,7 @@ h3 {
 
 .confirmation-actions {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .confirmation-action-card {
@@ -1119,6 +1124,11 @@ h3 {
   color: #667085;
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+.confirmation-action-card.primary p {
+  color: #24527a;
+  font-weight: 700;
 }
 
 .confirmation-section .secondary-action-button,

@@ -120,7 +120,7 @@ const patients = [
   { id: "P-240015", name: "山田 花子", count: 8, status: "レビュー待ち" },
   { id: "P-240016", name: "佐藤 健", count: 6, status: "確認中" },
   { id: "P-240017", name: "岡田 美咲", count: 10, status: "レビュー待ち" },
-  { id: "P-240018", name: "高橋 亮", count: 5, status: "承認済み" }
+  { id: "P-240018", name: "高橋 亮", count: 5, status: "確認完了" }
 ];
 
 const thumbnails = [
@@ -294,7 +294,7 @@ function Dashboard() {
       hint: "今日の0:00以降"
     },
     {
-      label: "承認済み件数",
+      label: "確認完了件数",
       value: statsResult.stats.approvedPhotos,
       icon: CheckCircle2,
       hint: "review_status = approved"
@@ -340,7 +340,7 @@ function Dashboard() {
         </div>
         <div className="status-row">
           <span className="status-dot ready" />
-          <span>元画像は不変、人間レビュー後に承認</span>
+          <span>元画像は不変、人間が確認完了</span>
         </div>
       </section>
     </div>
@@ -1468,7 +1468,7 @@ function Review({
   return (
     <div className="review-page">
       <div className="review-guidance">
-        QRコード画像を境界として自動作成された患者ごとの写真です。患者ID候補と写真のまとまりを確認してください。
+        AIが同じ患者と思われる写真をまとめました。写真と患者情報を確認し、問題がなければ確認完了してください。
       </div>
       <div className="review-mode-tabs" role="tablist" aria-label="確認状態の切り替え">
         <button
@@ -1569,8 +1569,8 @@ function Review({
             <section className={selectedGroup.needs_review_label ? "set-overview attention" : "set-overview"}>
               <div className="set-overview-header">
                 <div>
-                  <h3>患者の写真概要</h3>
-                  <p>患者ID候補: {selectedPatientCandidate ?? "なし"}</p>
+                  <h3>写真セット概要</h3>
+                  <p>患者の取り違えを防ぐため、最終確認は人が行います。</p>
                 </div>
                 {selectedGroup.needs_review_label ? <strong>要確認</strong> : <strong className="clear">通常確認</strong>}
               </div>
@@ -1588,44 +1588,6 @@ function Review({
                   <dd>{selectedAttentionReasons}</dd>
                 </div>
               </dl>
-              <div className="photo-type-check-panel">
-                <strong>撮影基準チェック</strong>
-                {selectedPhotoProtocol.value === "partial" ? (
-                  <p className="photo-type-check-message">部分撮影として確認します。不足判定は行いません。</p>
-                ) : selectedPhotoProtocol.value === "other" ? (
-                  <p className="photo-type-check-message">その他の撮影方法として確認します。不足判定は行いません。</p>
-                ) : photoTypeCheck.missingRequiredTypes.length === 0 ? (
-                  <p className="photo-type-check-message complete">
-                    {selectedPhotoProtocol.label}の基本写真が揃っています
-                  </p>
-                ) : (
-                  <div className="photo-type-check-section">
-                    <p>{selectedPhotoProtocol.label}で確認が必要な写真</p>
-                    <span>不足している可能性があります</span>
-                    <ul>
-                      {photoTypeCheck.missingRequiredTypes.map((item) => (
-                        <li key={item.value}>{item.label}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {(photoTypeCheck.otherCount > 0 || photoTypeCheck.unclassifiedCount > 0) && (
-                  <div className="photo-type-check-cautions">
-                    {photoTypeCheck.otherCount > 0 && (
-                      <div>
-                        <p>基本分類以外の写真があります</p>
-                        <span>要確認: その他 {photoTypeCheck.otherCount}枚</span>
-                      </div>
-                    )}
-                    {photoTypeCheck.unclassifiedCount > 0 && (
-                      <div>
-                        <p>未分類の写真があります</p>
-                        <span>要確認: 未分類 {photoTypeCheck.unclassifiedCount}枚</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
             </section>
             <div className={`preview-frame ${previewStatus === "表示中" && selectedPhoto ? "ready" : ""}`}>
               {selectedPhoto && intraoralPhotos.length > 1 && (
@@ -1855,6 +1817,80 @@ function Review({
           <span>{actionStatus}</span>
         </div>
         <form className="metadata-form">
+          {reviewListStatus === "pending" ? (
+            <section className="metadata-section confirmation-section">
+              <h3>確認チェック</h3>
+              <p>写真と患者情報を確認し、同じ患者の写真セットであれば確認完了してください。</p>
+              <div className="photo-type-check-panel">
+                <strong>撮影基準チェック</strong>
+                {selectedPhotoProtocol.value === "partial" ? (
+                  <p className="photo-type-check-message">部分撮影として確認します。不足判定は行いません。</p>
+                ) : selectedPhotoProtocol.value === "other" ? (
+                  <p className="photo-type-check-message">その他の撮影方法として確認します。不足判定は行いません。</p>
+                ) : photoTypeCheck.missingRequiredTypes.length === 0 ? (
+                  <p className="photo-type-check-message complete">
+                    {selectedPhotoProtocol.label}の基本写真が揃っています
+                  </p>
+                ) : (
+                  <div className="photo-type-check-section">
+                    <p>{selectedPhotoProtocol.label}で確認が必要な写真</p>
+                    <span>不足している可能性があります</span>
+                    <ul>
+                      {photoTypeCheck.missingRequiredTypes.map((item) => (
+                        <li key={item.value}>{item.label}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(photoTypeCheck.otherCount > 0 || photoTypeCheck.unclassifiedCount > 0) && (
+                  <div className="photo-type-check-cautions">
+                    {photoTypeCheck.otherCount > 0 && (
+                      <div>
+                        <p>基本分類以外の写真があります</p>
+                        <span>要確認: その他 {photoTypeCheck.otherCount}枚</span>
+                      </div>
+                    )}
+                    {photoTypeCheck.unclassifiedCount > 0 && (
+                      <div>
+                        <p>未分類の写真があります</p>
+                        <span>要確認: 未分類 {photoTypeCheck.unclassifiedCount}枚</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="confirmation-actions">
+                <div className="confirmation-action-card primary">
+                  <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
+                    <CheckCircle2 size={18} />
+                    確認完了
+                  </button>
+                  <p>写真と患者情報を確認済みにし、書き出し待ちにします。</p>
+                </div>
+                <div className="confirmation-action-card">
+                  <button className="secondary-action-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
+                    一時保存
+                  </button>
+                  <p>入力内容を保存します。確認完了にはしません。</p>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <div className="return-review-panel">
+              <p>この患者の写真を確認待ちに戻します。患者IDや担当医などを再編集できます。</p>
+              {selectedGroup?.export_status === "exported" && (
+                <strong>この患者は書き出し済みのため、確認待ちには戻せません。</strong>
+              )}
+              <button
+                className="secondary-action-button"
+                type="button"
+                onClick={handleReturnToPending}
+                disabled={!canReturnToPending || isBusy}
+              >
+                確認待ちに戻す
+              </button>
+            </div>
+          )}
           <section className="metadata-section">
             <h3>患者情報</h3>
             <label>
@@ -1932,7 +1968,8 @@ function Review({
           </section>
           {reviewListStatus === "pending" && (
             <section className="metadata-section photo-organization-section">
-              <h3>写真の整理</h3>
+              <h3>別患者の写真が混ざっていた場合</h3>
+              <p>写真のまとまりに問題がある場合だけ使う補助操作です。</p>
               <div className="selected-photo-line">
                 <span>選択中の写真</span>
                 <strong>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</strong>
@@ -1996,41 +2033,6 @@ function Review({
                 </button>
               </div>
             </section>
-          )}
-          {reviewListStatus === "pending" ? (
-            <section className="metadata-section confirmation-section">
-              <h3>確認操作</h3>
-              <div className="confirmation-actions">
-                <div className="confirmation-action-card">
-                  <button className="secondary-action-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
-                    一時保存
-                  </button>
-                  <p>入力内容を保存します。確認完了にはしません。</p>
-                </div>
-                <div className="confirmation-action-card primary">
-                  <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
-                    <CheckCircle2 size={18} />
-                    確認完了
-                  </button>
-                  <p>写真と患者情報を確認済みにし、書き出し待ちにします。</p>
-                </div>
-              </div>
-            </section>
-          ) : (
-            <div className="return-review-panel">
-              <p>この患者の写真を確認待ちに戻します。患者IDや担当医などを再編集できます。</p>
-              {selectedGroup?.export_status === "exported" && (
-                <strong>この患者は書き出し済みのため、確認待ちには戻せません。</strong>
-              )}
-              <button
-                className="secondary-action-button"
-                type="button"
-                onClick={handleReturnToPending}
-                disabled={!canReturnToPending || isBusy}
-              >
-                確認待ちに戻す
-              </button>
-            </div>
           )}
           <p className="review-action-message">{message}</p>
         </form>
@@ -2804,7 +2806,7 @@ function SettingsView() {
         <label className="toggle-row">
           <span>
             レビュー必須設定
-            <small>取込後に必ず承認フローへ送る</small>
+            <small>取込後に必ず確認完了フローへ送る</small>
           </span>
           <input type="checkbox" defaultChecked />
         </label>
