@@ -848,6 +848,7 @@ function Review({
   const [mergeTargetGroupId, setMergeTargetGroupId] = useState("");
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+  const [isSplitDropActive, setIsSplitDropActive] = useState(false);
 
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
   const sortedGroupPhotos = useMemo(
@@ -1379,15 +1380,11 @@ function Review({
     await movePhotoToTargetGroup(selectedPhoto.id, moveTargetGroupId);
   };
 
-  const handleSplitPhoto = async () => {
-    if (!selectedPhoto) {
-      return;
-    }
-
+  const splitPhotoToNewPatient = async (photoId: string) => {
     setActionStatus("分離中");
     setMessage("写真を新しい患者として分けています");
 
-    const result = await splitPhotoToNewGroup(selectedPhoto.id);
+    const result = await splitPhotoToNewGroup(photoId);
 
     if (result.status !== "success" || !result.groupId) {
       setActionStatus("分離失敗");
@@ -1488,6 +1485,7 @@ function Review({
   const handlePhotoDragEnd = () => {
     setDraggedPhotoId(null);
     setDragOverGroupId(null);
+    setIsSplitDropActive(false);
   };
 
   const getDraggedPhotoId = (event: DragEvent<HTMLElement>) =>
@@ -1531,6 +1529,49 @@ function Review({
     await movePhotoToTargetGroup(photoId, targetGroup.id, `写真を${targetLabel}へ移動しました`);
   };
 
+  const handleSplitPhoto = async () => {
+    if (!selectedPhoto) {
+      return;
+    }
+
+    await splitPhotoToNewPatient(selectedPhoto.id);
+  };
+
+  const handleSplitDropDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!canDragPhotos || !draggedPhotoId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setIsSplitDropActive(true);
+  };
+
+  const handleSplitDropDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsSplitDropActive(false);
+    }
+  };
+
+  const handleSplitDrop = async (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const photoId = getDraggedPhotoId(event);
+    setDraggedPhotoId(null);
+    setDragOverGroupId(null);
+    setIsSplitDropActive(false);
+
+    if (!photoId || !selectedGroup) {
+      return;
+    }
+
+    const confirmed = window.confirm("この写真を新しい患者として分けますか？");
+    if (!confirmed) {
+      return;
+    }
+
+    await splitPhotoToNewPatient(photoId);
+  };
+
   return (
     <div className="review-page">
       <div className="review-guidance">
@@ -1572,6 +1613,23 @@ function Review({
           <button className="review-refresh-button" type="button" onClick={handleRegroupByQrBoundaries} disabled={isBusy}>
             QRをもとに患者ごとに分け直す
           </button>
+        )}
+        {reviewListStatus === "pending" && (
+          <div
+            className={[
+              "split-drop-zone",
+              draggedPhotoId ? "drop-ready" : "",
+              isSplitDropActive ? "drop-over" : ""
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            onDragOver={handleSplitDropDragOver}
+            onDragLeave={handleSplitDropDragLeave}
+            onDrop={(event) => void handleSplitDrop(event)}
+          >
+            <strong>新しい患者として分ける</strong>
+            <span>写真をここへドラッグ</span>
+          </div>
         )}
         <div className="patient-list review-photo-list">
           {groups.map((group, index) => (

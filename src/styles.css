@@ -770,6 +770,40 @@ h3 {
   opacity: 0.58;
 }
 
+.split-drop-zone {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px dashed #b8c8d9;
+  border-radius: 8px;
+  color: #475467;
+  background: #f8fbfe;
+}
+
+.split-drop-zone strong {
+  color: #12283f;
+  font-size: 0.86rem;
+}
+
+.split-drop-zone span {
+  color: #667085;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.split-drop-zone.drop-ready {
+  border-color: #7bb7ef;
+  color: #24527a;
+  background: #f5faff;
+}
+
+.split-drop-zone.drop-over {
+  border-color: #1265b4;
+  background: #e8f2ff;
+  box-shadow: 0 0 0 3px rgba(18, 101, 180, 0.16);
+}
+
 .patient-item span,
 .patient-item em {
   color: #667085;

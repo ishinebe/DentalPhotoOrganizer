@@ -809,19 +809,84 @@ export async function movePhotoToGroup(photoId: string, targetGroupId: string): 
     };
   }
 
-  const { error } = await supabase
+  const sourceGroupId = membership.item.photo_group_id;
+  const sourceSortOrder = membership.item.sort_order;
+  const { data: targetOrderData, error: targetOrderError } = await supabase
     .from("photo_group_items")
-    .update({
-      photo_group_id: targetGroupId,
-      sort_order: null
-    })
-    .eq("photo_id", photoId);
+    .select("sort_order")
+    .eq("photo_group_id", targetGroupId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
 
-  if (error) {
+  if (targetOrderError) {
+    console.error("Failed to fetch target photo_group_items sort_order", {
+      photoId,
+      sourceGroupId,
+      targetGroupId,
+      error: targetOrderError
+    });
     return {
       status: "error",
       groupId: null,
-      message: error.message
+      message: "写真の移動に失敗しました"
+    };
+  }
+
+  const targetMaxSortOrder = ((targetOrderData ?? []) as unknown as Array<{ sort_order: number | null }>)[0]?.sort_order ?? 0;
+  const targetSortOrder = targetMaxSortOrder + 1;
+
+  const { error: deleteError } = await supabase
+    .from("photo_group_items")
+    .delete()
+    .eq("photo_id", photoId)
+    .eq("photo_group_id", sourceGroupId);
+
+  if (deleteError) {
+    console.error("Failed to delete source photo_group_items row", {
+      photoId,
+      sourceGroupId,
+      targetGroupId,
+      error: deleteError
+    });
+    return {
+      status: "error",
+      groupId: null,
+      message: "写真の移動に失敗しました"
+    };
+  }
+
+  const { error: insertError } = await supabase
+    .from("photo_group_items")
+    .insert({
+      photo_id: photoId,
+      photo_group_id: targetGroupId,
+      sort_order: targetSortOrder
+    });
+
+  if (insertError) {
+    console.error("Failed to insert target photo_group_items row", {
+      photoId,
+      sourceGroupId,
+      targetGroupId,
+      error: insertError
+    });
+    const { error: rollbackError } = await supabase.from("photo_group_items").insert({
+      photo_id: photoId,
+      photo_group_id: sourceGroupId,
+      sort_order: sourceSortOrder ?? 1
+    });
+    if (rollbackError) {
+      console.error("Failed to rollback photo_group_items move", {
+        photoId,
+        sourceGroupId,
+        targetGroupId,
+        error: rollbackError
+      });
+    }
+    return {
+      status: "error",
+      groupId: null,
+      message: "写真の移動に失敗しました"
     };
   }
 
