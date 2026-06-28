@@ -15,7 +15,7 @@ import {
   Wifi,
   WifiOff
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
 import {
   defaultPhotoProtocol,
@@ -846,6 +846,8 @@ function Review({
   const [staffMessage, setStaffMessage] = useState("スタッフ一覧を読み込んでいます");
   const [moveTargetGroupId, setMoveTargetGroupId] = useState("");
   const [mergeTargetGroupId, setMergeTargetGroupId] = useState("");
+  const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
+  const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
 
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
   const sortedGroupPhotos = useMemo(
@@ -1350,15 +1352,11 @@ function Review({
     await loadGroups(returnedGroupId, "pending");
   };
 
-  const handleMovePhoto = async () => {
-    if (!selectedPhoto || !moveTargetGroupId) {
-      return;
-    }
-
+  const movePhotoToTargetGroup = async (photoId: string, targetGroupId: string, successMessage?: string) => {
     setActionStatus("移動中");
     setMessage("写真を別の患者へ移動しています");
 
-    const result = await movePhotoToGroup(selectedPhoto.id, moveTargetGroupId);
+    const result = await movePhotoToGroup(photoId, targetGroupId);
 
     if (result.status !== "success" || !result.groupId) {
       setActionStatus("移動失敗");
@@ -1367,10 +1365,18 @@ function Review({
     }
 
     setActionStatus("移動成功");
-    setMessage(result.message);
+    setMessage(successMessage ?? result.message);
     setGroupPhotos([]);
     setSelectedPhotoId(null);
     await loadGroups(result.groupId);
+  };
+
+  const handleMovePhoto = async () => {
+    if (!selectedPhoto || !moveTargetGroupId) {
+      return;
+    }
+
+    await movePhotoToTargetGroup(selectedPhoto.id, moveTargetGroupId);
   };
 
   const handleSplitPhoto = async () => {
@@ -1465,6 +1471,66 @@ function Review({
     actionStatus === "分け直し中" ||
     loadStatus === "読み込み中";
 
+  const canDragPhotos = reviewListStatus === "pending" && Boolean(selectedGroup) && !isBusy && !isApprovedMode;
+
+  const handlePhotoDragStart = (event: DragEvent<HTMLElement>, photo: ReviewGroupPhoto) => {
+    if (!canDragPhotos) {
+      event.preventDefault();
+      return;
+    }
+
+    setDraggedPhotoId(photo.id);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-dental-photo-id", photo.id);
+    event.dataTransfer.setData("text/plain", photo.id);
+  };
+
+  const handlePhotoDragEnd = () => {
+    setDraggedPhotoId(null);
+    setDragOverGroupId(null);
+  };
+
+  const getDraggedPhotoId = (event: DragEvent<HTMLElement>) =>
+    event.dataTransfer.getData("application/x-dental-photo-id") || event.dataTransfer.getData("text/plain") || draggedPhotoId;
+
+  const canDropPhotoOnGroup = (groupId: string) =>
+    canDragPhotos && Boolean(draggedPhotoId) && Boolean(selectedGroup) && selectedGroup?.id !== groupId;
+
+  const handlePatientDragOver = (event: DragEvent<HTMLButtonElement>, group: ReviewGroup) => {
+    if (!canDropPhotoOnGroup(group.id)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDragOverGroupId(group.id);
+  };
+
+  const handlePatientDragLeave = (event: DragEvent<HTMLButtonElement>, groupId: string) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setDragOverGroupId((current) => (current === groupId ? null : current));
+    }
+  };
+
+  const handlePatientDrop = async (event: DragEvent<HTMLButtonElement>, targetGroup: ReviewGroup) => {
+    event.preventDefault();
+    const photoId = getDraggedPhotoId(event);
+    setDraggedPhotoId(null);
+    setDragOverGroupId(null);
+
+    if (!photoId || !selectedGroup || targetGroup.id === selectedGroup.id) {
+      return;
+    }
+
+    const targetLabel = formatGroupOption(targetGroup);
+    const confirmed = window.confirm(`${targetLabel}へ移動しますか？`);
+    if (!confirmed) {
+      return;
+    }
+
+    await movePhotoToTargetGroup(photoId, targetGroup.id, `写真を${targetLabel}へ移動しました`);
+  };
+
   return (
     <div className="review-page">
       <div className="review-guidance">
@@ -1511,8 +1577,18 @@ function Review({
           {groups.map((group, index) => (
             <button
               key={group.id}
-              className={selectedGroup?.id === group.id ? "patient-item set-item active" : "patient-item set-item"}
+              className={[
+                selectedGroup?.id === group.id ? "patient-item set-item active" : "patient-item set-item",
+                draggedPhotoId && selectedGroup?.id !== group.id && reviewListStatus === "pending" ? "drop-ready" : "",
+                draggedPhotoId && selectedGroup?.id === group.id ? "drop-current" : "",
+                dragOverGroupId === group.id ? "drop-over" : ""
+              ]
+                .filter(Boolean)
+                .join(" ")}
               onClick={() => setSelectedGroupId(group.id)}
+              onDragOver={(event) => handlePatientDragOver(event, group)}
+              onDragLeave={(event) => handlePatientDragLeave(event, group.id)}
+              onDrop={(event) => void handlePatientDrop(event, group)}
               type="button"
             >
               <div className="set-thumbnail">
@@ -1615,7 +1691,14 @@ function Review({
               )}
               {selectedPhoto ? (
                 previewStatus === "表示中" && previewDataUrl ? (
-                <img src={previewDataUrl} alt={selectedPhoto?.original_filename ?? "preview"} className="review-preview-image" />
+                  <img
+                    src={previewDataUrl}
+                    alt={selectedPhoto?.original_filename ?? "preview"}
+                    className={canDragPhotos ? "review-preview-image draggable-photo" : "review-preview-image"}
+                    draggable={canDragPhotos}
+                    onDragStart={(event) => handlePhotoDragStart(event, selectedPhoto)}
+                    onDragEnd={handlePhotoDragEnd}
+                  />
                 ) : (
                   <div className="preview-placeholder">
                     <ImageIcon size={36} />
@@ -1659,9 +1742,22 @@ function Review({
               {intraoralPhotos.map((photo) => (
                 <article
                   key={photo.id}
-                  className={selectedPhoto?.id === photo.id ? "group-photo-card active" : "group-photo-card"}
+                  className={[
+                    selectedPhoto?.id === photo.id ? "group-photo-card active" : "group-photo-card",
+                    canDragPhotos ? "draggable-photo" : "",
+                    draggedPhotoId === photo.id ? "dragging" : ""
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                 >
-                  <button className="group-photo-select-button" type="button" onClick={() => setSelectedPhotoId(photo.id)}>
+                  <button
+                    className="group-photo-select-button"
+                    draggable={canDragPhotos}
+                    type="button"
+                    onClick={() => setSelectedPhotoId(photo.id)}
+                    onDragStart={(event) => handlePhotoDragStart(event, photo)}
+                    onDragEnd={handlePhotoDragEnd}
+                  >
                   <span className="group-photo-thumb">
                     {photoThumbnailUrls[photo.id] ? (
                       <img src={photoThumbnailUrls[photo.id]} alt={photo.original_filename} />
