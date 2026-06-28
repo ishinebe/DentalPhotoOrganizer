@@ -212,8 +212,7 @@ Rules:
 - Use 「撮影方法」 in user-facing UI.
 - Use `photo_protocol` only for internal code or DB references.
 - Do not rename `photo_protocol` to `shooting_protocol` without a deliberate migration plan.
-- 5枚法 and 9枚法 required-photo checks are implemented.
-- 14枚法 is selectable and saved, but its detailed required-photo definition is not finalized.
+- 5枚法, 9枚法, and 14枚法 required-photo checks are implemented.
 - 部分撮影 and その他 should not trigger missing-photo checks.
 - The check is assistive and must not replace human review.
 
@@ -391,7 +390,7 @@ The following rules must not be violated:
 11. Do not treat exported as a permanent lock state.
 12. Do not silently delete or overwrite exported folders when implementing later additional export or re-export behavior.
 13. Do not treat shooting method checks as a replacement for human review.
-14. Do not assume 14枚法 completeness is implemented until its required-photo definition is finalized.
+14. Keep 14枚法 completeness behavior aligned with docs/shooting-method.md.
 
 ## Recommended Agent Workflow
 

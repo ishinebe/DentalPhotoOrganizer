@@ -122,9 +122,9 @@ The patient information / photo review screen currently supports:
 - 部分撮影
 - その他
 
-5枚法 and 9枚法 have implemented required-photo checks.
+5枚法, 9枚法, and 14枚法 have implemented required-photo checks.
 
-14枚法 is selectable and saved, but its detailed required-photo definition is not finalized yet.
+14枚法 uses the formal required clinical photo type definition in docs/shooting-method.md.
 
 部分撮影 and その他 do not perform missing-photo checks.
 
