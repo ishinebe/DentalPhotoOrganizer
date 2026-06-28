@@ -414,12 +414,26 @@ h3 {
   gap: 18px;
 }
 
+.search-layout {
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  align-items: start;
+}
+
 .import-panel,
 .status-panel,
 .form-panel,
 .results-panel,
 .app-info {
   padding: 22px;
+}
+
+.search-layout .form-panel {
+  padding: 14px;
+}
+
+.search-layout .results-panel {
+  min-width: 0;
+  padding: 18px;
 }
 
 .panel-heading {
@@ -1722,26 +1736,63 @@ textarea:focus {
 
 .search-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 9px;
+}
+
+.search-grid label {
+  gap: 5px;
+  font-size: 0.82rem;
+}
+
+.search-grid input {
+  height: 34px;
+  padding: 0 9px;
 }
 
 .search-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.search-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #cbd8e5;
+  border-radius: 8px;
+  color: #263748;
+  background: #ffffff;
+  font-weight: 700;
+}
+
+.search-actions .primary-button {
+  border-color: #1265b4;
+  color: #ffffff;
+  background: #1265b4;
+}
+
+.search-layout .review-status {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  font-size: 0.82rem;
 }
 
 .search-result-list {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 10px;
 }
 
 .search-result-card {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  padding: 14px;
   border: 1px solid #d8e3ee;
   border-radius: 8px;
   background: #ffffff;
@@ -1820,7 +1871,7 @@ textarea:focus {
 .search-result-card dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
+  gap: 8px 12px;
   margin: 0;
 }
 
@@ -1851,6 +1902,20 @@ textarea:focus {
   background: #fff8f6;
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .search-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .search-grid {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+
+  .search-result-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .empty-result {
