@@ -1,143 +1,193 @@
 # Development Phases
 
-This document defines the staged development and data-collection strategy for DentalPhotoOrganizer.
+This document defines staged development for DentalPhotoOrganizer.
 
-## Basic Direction
+The development order should be driven primarily by completion of the real sorting workflow, not by increasing sophistication of image classification.
 
-DentalPhotoOrganizer should not attempt to handle every clinical photo pattern from the beginning.
+The core product flow is:
 
-The initial phases should focus on stable, well-structured data and gradually expand to more variable real-world clinical data.
+1. import mixed-source photos,
+2. provisionally separate them by patient,
+3. let a human confirm and correct the grouping quickly,
+4. safely export confirmed photos into patient × shooting-date folders,
+5. provide simple search to reopen the final storage location.
 
-The goal is to validate the workflow first:
-
-1. QR/barcode-based separation
-2. provisional shooting set creation
-3. human confirmation
-4. final export
-5. search by patient ID, shooting date, doctor, and photographer
-
-AI should initially support provisional grouping and suspicious-case detection, not autonomous final classification.
+AI, shooting protocols, and image-type classification are supporting techniques inside this flow, not independent product goals.
 
 ---
 
-## Phase 1: Standard Five-Photo Series With QR/Barcode
+## Phase 1: Safe Import and Basic Patient Separation
 
-### Target Data
+### Goal
 
-- Standard intraoral five-photo series
-- QR/barcode image is present
-- Patient boundary is clear
-- Number of photos is relatively fixed
-- Shooting date is clear
-- No known mixed-patient photos
-- Human-confirmed clean data
+Prove that mixed photos can be imported safely and provisionally separated by patient using simple, reliable signals.
 
-### Purpose
+### Scope
 
-Validate the core workflow under stable conditions.
+- import from selected storage/folder,
+- preserve source images or a safe working copy,
+- detect QR/barcode when present,
+- use QR/barcode and shooting order as provisional patient boundaries,
+- create provisional patient groups,
+- avoid destructive edits to source images.
 
 ### Validation Points
 
-- QR/barcode can be used as a shooting-set boundary
-- provisional shooting sets are created correctly
-- Review UI is understandable
-- reviewer can confirm the set efficiently
-- approved sets can be exported
+- source images are not lost,
+- patient groups are created consistently,
+- missing QR/barcode cases remain visible rather than being silently finalized,
+- duplicate import or overwrite risks are controlled.
 
 ---
 
-## Phase 2: Standard Five-Photo Series With Missing QR/Barcode Cases
+## Phase 2: Fast Human Confirmation and Correction
 
-### Target Data
+### Goal
 
-- Standard intraoral five-photo series
-- Some cases have missing QR/barcode images
-- Patient boundaries may be partially unclear
+Reduce the manual work needed to confirm and correct provisional patient grouping.
 
-### Purpose
+### Scope
 
-Evaluate how the system handles missing QR/barcode cases.
+- Review screen centered on photos rather than metadata editing,
+- confirm that photos belong to the same patient,
+- move photos between existing patients,
+- split photos into a new patient group,
+- merge patient groups when necessary,
+- clearly surface uncertain patient-boundary cases.
 
 ### Validation Points
 
-- missing QR/barcode cases are clearly flagged
-- patient ID manual entry is restricted by format validation
-- patient search/autocomplete can reduce input errors
-- suspected boundary issues are sent to confirmation rather than automatically finalized
+- ordinary cases can be confirmed quickly,
+- mixed-patient cases can be corrected without touching source files manually,
+- drag-and-drop or equivalent correction is faster than the existing folder-based workflow,
+- users do not need to understand internal database concepts.
 
 ---
 
-## Phase 3: Variable Number of Clinical Photos
+## Phase 3: Safe Final Export
 
-### Target Data
+### Goal
 
-- Intraoral photos with variable numbers of images per patient
-- Multiple clinical patterns beyond fixed five-photo series
-- Still mainly ordinary clinical photographs rather than surgical photos
+Replace manual folder creation and file movement with a safe, predictable export process.
 
-### Purpose
+### Scope
 
-Evaluate whether shooting-set based review works when photo counts vary.
+- export only human-confirmed patient groups,
+- default final storage unit is patient × shooting date,
+- combine multiple confirmed shooting sets from the same patient and date when appropriate,
+- keep photos from the same patient/date in the same folder by default,
+- use simple sequential filenames such as `001.jpg`, `002.jpg`, ...,
+- preserve original file extension where practical,
+- prevent accidental overwrite or folder-name collision,
+- record export destination and export time,
+- verify that export completed successfully before temporary working data can be discarded.
 
 ### Validation Points
 
-- reviewer can understand each shooting set even when the number of photos differs
-- suspiciously large or small sets are flagged
-- time gaps and image similarity can be used as hints for possible patient-boundary errors
+- users no longer need to manually create patient folders for routine cases,
+- filenames do not encode changeable semantics such as laterality or image type,
+- re-export or repeated import does not destroy existing data,
+- exported photos remain usable without DentalPhotoOrganizer.
 
 ---
 
-## Phase 4: Surgical and Soft-Tissue-Centered Photos
+## Phase 4: Simple Search and Retrieval
 
-### Target Data
+### Goal
 
-- GBR
-- CTG
-- implant-related surgery
-- extraction or surgical photos
-- soft-tissue-centered images
-- bleeding or suturing scenes
+Help users find previously organized photos without turning DentalPhotoOrganizer into a full image-management platform.
 
-### Purpose
+### Scope
 
-Expand from standard intraoral photo grouping to more difficult clinical cases.
+- patient ID search,
+- shooting-date search,
+- include exported data in search results,
+- show final storage destination,
+- open the final storage folder directly.
 
 ### Validation Points
 
-- surgical photos are not forced into standard five-photo categories
-- uncertain cases are flagged as requiring human confirmation
-- AI is used for suspicious-case detection rather than definitive patient identification
+- a user can find the patient/date folder quickly,
+- search remains lightweight,
+- the final storage folder, not the application database, remains the long-term photo authority.
 
 ---
 
-## Data Collection Policy
+## Phase 5: Robustness for Real-World Variation
 
-Early training and validation data should be clean and structured.
+### Goal
 
-Initial data collection should prioritize:
+Improve provisional separation and warning quality for cases where QR/barcode boundaries are incomplete or clinical photo patterns vary.
 
-- standard five-photo series
-- QR/barcode included
-- confirmed same-patient image sets
-- clear shooting date
-- clear review result
+### Target Cases
 
-Data that should be excluded from the earliest phase:
+- missing QR/barcode,
+- variable photo counts,
+- partial photo series,
+- face photos,
+- surgical photos,
+- GBR / CTG / implant surgery,
+- unusually long or short time gaps,
+- suspected mixed-patient cases.
 
-- missing QR/barcode cases
-- unclear patient boundaries
-- surgical photos
-- GBR or CTG cases
-- face photos
-- heavily variable photo counts
-- mixed-patient sets unless intentionally prepared for testing
+### Possible Techniques
 
-These more complex cases should be introduced only after the basic workflow is stable.
+- timestamps,
+- shooting sequence,
+- image similarity,
+- expected photo-count hints,
+- optional AI-based outlier detection.
+
+### Validation Points
+
+- uncertain cases are surfaced for human confirmation,
+- the system does not force all photos into fixed five-/nine-/fourteen-photo categories,
+- AI output never becomes the final patient-identification decision.
 
 ---
 
-## Safety Principle
+## Phase 6: Optional Metadata Assistance
 
-The system should not automatically finalize patient assignment based only on AI output.
+### Goal
 
-AI may suggest grouping or flag suspicious images, but final confirmation must be performed by a human reviewer.
+Add useful metadata only where it improves downstream retrieval or reduces work.
+
+### Possible Functions
+
+- doctor selection or recognition,
+- photographer selection or recognition,
+- shooting protocol,
+- image-type suggestions,
+- laterality suggestions,
+- optional tags or notes.
+
+### Constraint
+
+Metadata entry must not become a new mandatory manual burden for routine export unless there is a clear operational reason.
+
+Image type and laterality should remain metadata, not filename semantics.
+
+---
+
+## Current Non-Priorities
+
+The following should not drive development until the core workflow is validated:
+
+- full-featured patient photo library,
+- longitudinal treatment comparison,
+- advanced annotation,
+- image editing,
+- presentation generation,
+- printing workflows,
+- definitive automatic image-type classification,
+- replacing the clinic's existing long-term image-management/storage system.
+
+---
+
+## Product Decision Rule
+
+Before adding a major feature, ask:
+
+> Does this reduce the human work required to sort and safely store photographs by patient?
+
+If not, treat it as secondary or out of scope unless there is a separate explicit product decision.
