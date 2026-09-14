@@ -1,51 +1,96 @@
 # DentalPhotoOrganizer
 
-DentalPhotoOrganizer is a dental photo management system for organizing intraoral photographs with AI-assisted provisional grouping and human review.
+DentalPhotoOrganizer is a preprocessing and safety-confirmation tool for dental clinical photographs.
 
-## Purpose
+It is not intended to be a general-purpose dental image management system. Its primary purpose is to reduce the human workload required to sort large numbers of clinical photographs by patient before they are placed in the clinic's normal storage folders.
 
-This project aims to reduce the workload involved in importing, sorting, reviewing, and exporting dental clinical photographs.
+## Product Purpose
 
-The system is designed to support the workflow in which intraoral photographs are first provisionally grouped by patient or shooting set, then reviewed by a human operator before final export.
+The core problem is manual patient-by-patient photo sorting.
+
+In the current workflow, photographs from multiple patients may be stored together on an SD card or similar storage medium. A staff member later has to identify patient boundaries, separate photographs, correct mixed-patient cases, create folders, and move the photographs to the correct storage location.
+
+DentalPhotoOrganizer should reduce that work while preserving safety.
+
+The primary product question is:
+
+> Does this feature reduce the human work required to sort photographs by patient safely?
+
+If not, it should not be treated as core functionality without a clear reason.
+
+## Core Workflow
+
+1. Import photographs from an SD card or other source.
+2. Preserve source images safely during processing.
+3. Use QR/barcode, shooting order, timestamps, image characteristics, or other signals to provisionally separate photographs by patient.
+4. Present the provisional patient groups to a human reviewer.
+5. Allow the reviewer to confirm, move, split, or merge photographs when necessary.
+6. After human confirmation, export the photographs into the clinic's normal storage folders.
+7. Provide simple search/indexing so previously organized patient folders can be found again.
 
 ## Core Principles
 
-- Original image files must remain unchanged.
-- Patient assignment and metadata are managed in the database.
-- AI is used only for provisional grouping and flagging suspicious cases.
 - Human review is required before final export.
-- All shooting sets, including non-flagged sets, must be confirmed by a reviewer.
-- Final export occurs only after human confirmation.
-- Doctor and photographer should be selected from a registered staff list instead of free-text entry.
-- Patient ID input should be restricted and supported by search/autocomplete when possible.
-- Barcode or QR missing cases should be clearly marked as requiring attention.
+- AI is a means of reducing sorting work, not the product goal itself.
+- Original/source images must not be destructively modified during review.
+- Provisional grouping should be corrected through metadata and grouping operations rather than by editing source files.
+- The final clinic storage folder is the long-term authority for organized clinical photographs.
+- DentalPhotoOrganizer's database is primarily for processing state, audit history, and search/indexing.
+- A shooting set is a processing/review unit, not necessarily the final storage unit.
+- The default final storage unit is patient × shooting date.
+- Photos from the same patient on the same date may be stored in the same folder even if they came from multiple shooting sets.
+- Exported filenames should remain simple and robust, such as sequential numbering (`001.jpg`, `002.jpg`, ...).
+- Image type, laterality, shooting protocol, doctor, and photographer are useful metadata, but they must not create unnecessary manual work or become mandatory unless clearly needed.
 
-## Current Workflow Concept
+## Review Screen Goal
 
-1. Import images from a storage source.
-2. Store original images without modifying, renaming, or deleting them.
-3. Detect barcode or QR images when available.
-4. Create provisional shooting sets.
-5. Flag sets or images that may require attention.
-6. Review each shooting set in the application.
-7. Confirm that no other patient's images are mixed in.
-8. Approve the shooting set.
-9. Export approved data to the final storage location.
+The main Review task is simple:
 
-## Main Review Task
+> Confirm that the provisionally grouped photos belong to the same patient, and correct the grouping if they do not.
 
-The Review screen should be understood as a shooting set confirmation screen.
+The normal flow should be:
 
-The user's task is to confirm whether the AI-provisionally grouped shooting set contains only images from the same patient.
+1. Look at the photos.
+2. Confirm that they belong to the same patient.
+3. If correct, complete confirmation.
+4. If incorrect, move, split, or merge photos quickly.
 
-The UI should avoid system-oriented terms such as "group" or "approval" where possible, and instead use workflow-oriented wording such as:
+The UI should avoid developer-oriented terminology and should not imply that AI has made a final patient-identification decision.
 
-- Shooting set confirmation
-- Shooting set waiting for confirmation
-- Patient ID
-- Doctor
-- Photographer
-- No issue / move to next shooting set
+## Search Scope
+
+Search is a support function, not the main product.
+
+Its purpose is to help users find previously organized patient photo folders and open the final storage location. DentalPhotoOrganizer should not expand into a full-featured image viewer, annotation system, or longitudinal comparison platform unless there is a separate, explicit product decision to do so.
+
+## Non-Goals
+
+The current product should not prioritize:
+
+- full-featured dental image management,
+- advanced image editing,
+- treatment-plan or presentation generation,
+- detailed annotation or drawing tools,
+- automatic definitive image-type classification,
+- longitudinal comparison views,
+- replacing the clinic's existing long-term storage system.
+
+## Documentation
+
+The highest-level product definition is:
+
+- `PRODUCT_PRINCIPLES.md`
+
+Supporting documentation is stored under `docs/`:
+
+- `docs/requirements.md.txt`
+- `docs/workflow.md.txt`
+- `docs/db_schema.md.txt`
+- `docs/ui_principles.md`
+- `docs/development_phases.md`
+- `docs/competitive_analysis.md`
+
+When implementation details conflict with `PRODUCT_PRINCIPLES.md`, the product principles should be reviewed first before extending the implementation.
 
 ## Development
 
@@ -73,16 +118,8 @@ Run production build:
 npm run build
 ```
 
-## Documentation
+## Current Stage
 
-Project documentation is stored under the `docs/` directory.
+The project is in a prototype and workflow-validation phase.
 
-- `docs/requirements.md`
-- `docs/workflow.md`
-- `docs/db_schema.md`
-
-## Notes
-
-This project is currently in the prototype and workflow-validation phase.
-
-The initial prototype prioritizes workflow validation, UI clarity, QR/barcode-based grouping, review, approval, and search. Direct SD-card integration and Electron-specific automation can be considered in later phases.
+The current priority is to complete and validate the end-to-end workflow from mixed-source import to patient-level confirmation and safe export, before adding broader image-management features.
