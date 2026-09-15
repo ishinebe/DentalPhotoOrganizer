@@ -70,10 +70,10 @@ Title:
 The system supports patient-based photograph retrieval.
 
 Reason:
-Photographs are used for clinical treatment, research, education, and certification documentation.
+Users need to find previously organized data after export.
 
 Decision:
-Search functions include patient information.
+Search functions include patient information and should help users reach the recorded official export location.
 
 Status:
 Accepted
@@ -83,13 +83,13 @@ Accepted
 ## Decision 0006
 
 Title:
-The system stores operator and attending doctor information.
+The system stores operator and attending doctor information when useful.
 
 Reason:
-Clinical photographs often require attribution and traceability.
+Clinical photographs may require attribution and traceability.
 
 Decision:
-Photographs and groups may be associated with operator and doctor metadata.
+Photographs and groups may be associated with operator and doctor metadata. These fields are not automatically mandatory for the core patient-sorting workflow unless institutional or workflow requirements demand them.
 
 Status:
 Accepted
@@ -115,13 +115,13 @@ Accepted
 ## Decision 0008
 
 Title:
-The application prioritizes local storage over cloud storage.
+The application prioritizes local clinical storage over cloud image storage.
 
 Reason:
-Medical data protection requirements make local-first architecture preferable.
+Medical data protection and operational continuity favor keeping image files within the clinic environment.
 
 Decision:
-Photographs remain within the clinic environment.
+Photograph files remain within the clinic environment. Supabase is used for application metadata and workflow state, not as the required long-term image repository.
 
 Status:
 Accepted
@@ -134,10 +134,10 @@ Title:
 Operator fatigue reduction is a design goal.
 
 Reason:
-Large volumes of photographs are reviewed daily.
+Large volumes of photographs may require repetitive sorting and review.
 
 Decision:
-The interface should reduce unnecessary clicks, context switching, and cognitive load.
+The interface should reduce unnecessary clicks, context switching, cognitive load, and avoidable metadata entry.
 
 Status:
 Accepted
@@ -159,7 +159,6 @@ Design implications:
 - Existing exported folders should not be deleted or overwritten silently.
 - Additional export should prefer copying only newly needed photographs or otherwise avoid destructive changes.
 - If full re-export is introduced later, it should preserve or back up the previous exported folder.
-- Future UI may allow each photograph to be marked as included in export or excluded from export.
 - A photograph excluded from export should remain available for later inclusion.
 
 Status:
@@ -184,8 +183,106 @@ Design implications:
 - The application should not attempt to detect or track later copies to personal PCs, SD cards, USB drives, or other external locations.
 - Additional export should target the official export destination rather than arbitrary personal destinations.
 - Existing files in the official export destination must not be deleted or overwritten silently.
-- If users need photographs elsewhere, they should copy them from the official export destination outside the application.
-- This boundary prevents export path records from becoming fragmented across many individual users and devices.
+
+Status:
+Accepted
+
+---
+
+## Decision 0012
+
+Title:
+The core product problem is patient-by-patient sorting before formal storage.
+
+Reason:
+The largest operational burden is not viewing photographs after they are already assigned correctly. It is separating large volumes of mixed photographs by patient, confirming boundaries, correcting mixed-patient cases, and creating the final patient folders.
+
+Decision:
+DentalPhotoOrganizer is primarily a preprocessing and safety-confirmation tool for this upstream workflow. Product expansion should be evaluated against whether it reduces the human work required to sort photographs by patient safely.
+
+Design implications:
+- Patient sorting, correction, confirmation, and safe export have priority over general image-library features.
+- Advanced longitudinal comparison, annotation, presentation generation, and full image-management behavior are not core requirements.
+- AI is an implementation method, not the product purpose.
+
+Status:
+Accepted
+
+---
+
+## Decision 0013
+
+Title:
+Processing units and final storage units are different concepts.
+
+Reason:
+The application may create multiple provisional patient photo sets during import and review. These internal groups should not force the clinic's permanent folder structure.
+
+Decision:
+Patient photo sets remain internal processing/review units. The target final storage unit is patient × shooting date. Multiple internal photo sets for the same patient and shooting date may be organized into the same official destination.
+
+Design implications:
+- Database grouping structure must not dictate folder structure unnecessarily.
+- Same-patient, same-day additional photographs should be supportable without creating artificial subfolders merely because they came from different internal groups.
+- Detailed post-export organization may still be performed manually if desired.
+
+Status:
+Accepted
+
+---
+
+## Decision 0014
+
+Title:
+Final output filenames use simple sequential numbering by default.
+
+Reason:
+Photo type and laterality can be misclassified or corrected later. Embedding these interpretations in filenames increases correction cost and can create misleading output.
+
+Decision:
+Final exported filenames should use simple numbering such as `001.jpg`, `002.jpg`, `003.jpg` by default. Photo type, laterality, and similar information may remain as database metadata but should not be required in filenames.
+
+Design implications:
+- Output naming should be independent of mutable classification labels.
+- Additional export must avoid filename collisions and silent overwrites.
+- File extensions may be preserved according to the actual output format.
+
+Status:
+Accepted
+
+---
+
+## Decision 0015
+
+Title:
+The official export folder is the durable organized output; the database is an index and workflow store.
+
+Reason:
+Clinical photographs should remain accessible as ordinary files even if the application or database is unavailable in the future. Making the database the sole authority for accessing exported photographs would create unnecessary long-term dependency.
+
+Decision:
+The official clinic folder is the durable organized output. The database stores assignment metadata, workflow state, traceability, export destination records, and search indexes.
+
+Design implications:
+- Search should primarily help users find the recorded official folder.
+- Post-export manual organization must not automatically invalidate access to the photographs.
+- The product should not require a full in-app photo library merely to retrieve exported data.
+
+Status:
+Accepted
+
+---
+
+## Decision 0016
+
+Title:
+Optional metadata must not create disproportionate manual workload.
+
+Reason:
+The product exists to reduce manual work. Requiring users to fill or correct every possible metadata field can offset the time saved by automatic patient sorting.
+
+Decision:
+Patient ID and shooting date are core to the target storage workflow. Attending doctor, photographer, shooting method, photo type, laterality, and similar fields may be retained and used where valuable, but should become mandatory only for a clear safety, workflow, institutional, or research reason.
 
 Status:
 Accepted

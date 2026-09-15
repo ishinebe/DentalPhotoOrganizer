@@ -1,18 +1,56 @@
 # DentalPhotoOrganizer Vision
 
-DentalPhotoOrganizer is a desktop application designed to assist the management, organization, review, and retrieval of intraoral photographs.
+DentalPhotoOrganizer exists to reduce the manual work required to sort large numbers of dental clinical photographs by patient before those photographs are placed in the clinic's normal storage folders.
 
-The primary purpose of the software is to reduce the time and cognitive load required for photograph organization, allowing clinicians and staff to spend more time on diagnosis, treatment, education, and research.
+The software is best understood as a **preprocessing and safety-confirmation layer**, not as a replacement for a full dental image-management system.
 
-The software supports AI-assisted photo classification while maintaining the level of safety, traceability, and accountability required for medical data.
+## Core problem
 
-Goals:
+In the current workflow, photographs from multiple patients may be stored together on an SD card or local folder. A staff member later has to identify patient boundaries, separate photographs by patient, correct mixed-patient cases, create destination folders, and move the photographs into the correct storage location.
 
-- Reduce time spent organizing photographs.
-- Reduce human error during photograph management.
-- Improve searchability of clinical photographs.
-- Support research and board certification case preparation.
-- Enable retrieval by patient, date, operator, and attending doctor.
-- Make photograph ownership and responsibility traceable.
-- Improve long-term management of clinical photograph archives.
-- Allow overnight automated processing with human review the following day.
+This repetitive sorting work is the main problem the product should solve.
+
+## Primary success criterion
+
+The most important product question is:
+
+> Does this feature reduce the human work required to sort photographs by patient safely?
+
+A feature that does not materially improve that workflow should not automatically become a core requirement.
+
+## Product goals
+
+- Reduce manual patient-by-patient sorting work.
+- Reduce mixed-patient assignment errors.
+- Preserve original image files safely.
+- Make patient-boundary uncertainty visible instead of silently guessing.
+- Support fast human confirmation and correction.
+- Export confirmed photographs safely to the clinic's normal storage structure.
+- Prevent accidental overwrites and folder/file collisions.
+- Preserve enough history for later verification.
+- Provide lightweight search so organized patient folders can be found again.
+
+## Product boundary
+
+DentalPhotoOrganizer may store metadata such as attending doctor, photographer, shooting method, photo type, and classification confidence when useful.
+
+However, the product should not create new mandatory manual work merely to collect metadata that is not required for safe patient sorting.
+
+The product is not primarily responsible for:
+
+- advanced patient photo-library browsing,
+- longitudinal treatment comparison,
+- annotation or drawing tools,
+- presentation or patient-explanation material generation,
+- full-featured image editing,
+- perfect automatic classification of every clinical photo type.
+
+## Automation and AI
+
+QR codes, barcodes, timestamps, file order, image characteristics, and AI may all be used as signals for provisional grouping.
+
+None of these signals is the final authority on patient assignment.
+
+Human confirmation remains mandatory before official export.
+
+AI is an implementation tool for reducing manual work, not the product's purpose by itself.

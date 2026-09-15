@@ -5,3 +5,6 @@ dist-electron/
 .env
 npm-debug.log*
 *.local
+
+# Local test/export output. Do not commit clinical or generated image output.
+testphoto/exported/
