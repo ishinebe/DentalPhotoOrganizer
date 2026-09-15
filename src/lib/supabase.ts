@@ -21,7 +21,7 @@ export const supabase = hasSupabaseConfig
   : null;
 
 export async function getSupabaseConnectionStatus(): Promise<SupabaseConnectionStatus> {
-  if (!hasSupabaseConfig) {
+  if (!hasSupabaseConfig || !supabase) {
     return {
       status: "not-configured",
       message: ".env に VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を設定してください"
@@ -29,29 +29,23 @@ export async function getSupabaseConnectionStatus(): Promise<SupabaseConnectionS
   }
 
   try {
-    const response = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/`, {
-      method: "GET",
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`
-      }
-    });
+    const { error } = await supabase.from("photos").select("id").limit(1);
 
-    if (!response.ok) {
+    if (error) {
       return {
         status: "failed",
-        message: `Supabase API から ${response.status} が返されました`
+        message: `Supabaseへの接続確認に失敗しました: ${error.message}`
       };
     }
 
     return {
       status: "success",
-      message: "Supabase プロジェクトに接続できました"
+      message: "Supabaseに接続できました"
     };
   } catch {
     return {
       status: "failed",
-      message: "Supabase API に到達できませんでした"
+      message: "Supabaseへの接続確認中にエラーが発生しました"
     };
   }
 }
