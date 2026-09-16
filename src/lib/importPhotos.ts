@@ -8,6 +8,7 @@ export type LocalImageFile = {
   fileHash: string;
   codeType: "qrcode" | null;
   codeText: string | null;
+  capturedAt: string | null;
 };
 
 export type ImportPhotosResult = {
@@ -60,6 +61,7 @@ export async function importPhotoMetadata(files: LocalImageFile[]): Promise<Impo
         mime_type: file.mimeType,
         code_type: file.codeType,
         code_text: file.codeText,
+        captured_at: file.capturedAt,
         imported_at: new Date().toISOString(),
         review_status: "pending",
         export_status: "not_exported"

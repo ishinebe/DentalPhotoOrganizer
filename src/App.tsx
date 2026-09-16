@@ -2212,7 +2212,14 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
     typeof window.electronAPI?.exportPhotoFiles === "function";
   const isBusy = loadStatus === "読み込み中" || actionStatus === "フォルダ選択中" || actionStatus === "書き出し中";
   const targetPhotoCount = countExportPhotos(groups);
-  const canExport = isElectronApiConnected && Boolean(exportRootPath) && groups.length > 0 && targetPhotoCount > 0 && !isBusy;
+  const incompleteExportGroups = groups.filter((group) => !group.patient_id?.trim() || !group.shooting_date?.trim());
+  const canExport =
+    isElectronApiConnected &&
+    Boolean(exportRootPath) &&
+    groups.length > 0 &&
+    targetPhotoCount > 0 &&
+    incompleteExportGroups.length === 0 &&
+    !isBusy;
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null;
   const sortedSelectedExportPhotos = useMemo(
     () => (selectedGroup ? sortPhotosForDisplay(selectedGroup.photos, getInitialPhotoType) : []),
@@ -2326,6 +2333,12 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
     if (!window.electronAPI?.exportPhotoFiles || !exportRootPath) {
       setActionStatus("書き出し失敗");
       setMessage("書き出し機能を利用できない、または書き出し先フォルダが未選択です");
+      return;
+    }
+
+    if (incompleteExportGroups.length > 0) {
+      setActionStatus("書き出し失敗");
+      setMessage("患者IDまたは撮影日が未入力の患者写真セットがあります。患者情報・写真確認で修正してください。");
       return;
     }
 
@@ -2443,6 +2456,9 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
             書き出し開始
           </button>
           <p>選択したフォルダに、患者ごとのフォルダを作成してコピーします。</p>
+          {incompleteExportGroups.length > 0 && (
+            <p>患者IDまたは撮影日が未入力の患者写真セットは書き出しできません。</p>
+          )}
           <button type="button" onClick={() => void loadExportTargets()} disabled={isBusy}>
             再読み込み
           </button>

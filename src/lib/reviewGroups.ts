@@ -43,6 +43,7 @@ export type ReviewGroupPhoto = {
   reviewed_at: string | null;
   approved_at: string | null;
   notes: string | null;
+  captured_at: string | null;
   photo_type: string | null;
   photo_type_confidence: number | null;
   photo_type_source: string | null;
@@ -123,6 +124,7 @@ const photoColumns = [
   "reviewed_at",
   "approved_at",
   "notes",
+  "captured_at",
   "photo_type",
   "photo_type_confidence",
   "photo_type_source"
@@ -156,6 +158,8 @@ type GroupDisplaySummary = {
   qrPatientCandidate: string | null;
   hasQrPhoto: boolean;
   qrPhotoCount: number;
+  capturedDateCandidate: string | null;
+  hasMixedCapturedDates: boolean;
   notes: string | null;
   representativePhotoPath: string | null;
   representativePhotoFilename: string | null;
@@ -229,7 +233,8 @@ export async function fetchReviewGroupsByStatus(reviewStatus: ReviewGroupListSta
           hasQrPhoto: summary?.hasQrPhoto ?? false,
           patientCandidate,
           photoCount,
-          qrPhotoCount: summary?.qrPhotoCount ?? 0
+          qrPhotoCount: summary?.qrPhotoCount ?? 0,
+          hasMixedCapturedDates: summary?.hasMixedCapturedDates ?? false
         });
 
         return {
@@ -399,7 +404,8 @@ export async function updateReviewGroupMetadata(
     hasQrPhoto: displaySummary?.hasQrPhoto ?? false,
     patientCandidate,
     photoCount: photoIds.ids.length,
-    qrPhotoCount: displaySummary?.qrPhotoCount ?? 0
+    qrPhotoCount: displaySummary?.qrPhotoCount ?? 0,
+    hasMixedCapturedDates: displaySummary?.hasMixedCapturedDates ?? false
   });
 
   return {
@@ -507,7 +513,8 @@ export async function completeReviewGroup(
     hasQrPhoto: displaySummary?.hasQrPhoto ?? false,
     patientCandidate,
     photoCount: photoIds.ids.length,
-    qrPhotoCount: displaySummary?.qrPhotoCount ?? 0
+    qrPhotoCount: displaySummary?.qrPhotoCount ?? 0,
+    hasMixedCapturedDates: displaySummary?.hasMixedCapturedDates ?? false
   });
 
   return {
@@ -616,7 +623,8 @@ export async function returnReviewGroupToPending(groupId: string): Promise<Revie
     hasQrPhoto: displaySummary?.hasQrPhoto ?? false,
     patientCandidate,
     photoCount: photoIds.ids.length,
-    qrPhotoCount: displaySummary?.qrPhotoCount ?? 0
+    qrPhotoCount: displaySummary?.qrPhotoCount ?? 0,
+    hasMixedCapturedDates: displaySummary?.hasMixedCapturedDates ?? false
   });
 
   return {
@@ -734,6 +742,8 @@ async function ensurePendingPhotosHaveGroupsInternal(): Promise<EnsureGroupsResu
       return createResult;
     }
   }
+
+  await fillMissingShootingDatesForGroups([...new Set((itemData ?? []).map((item) => (item as GroupItemRow).photo_group_id))]);
 
   return {
     status: "success" as const,
@@ -890,6 +900,8 @@ export async function movePhotoToGroup(photoId: string, targetGroupId: string): 
     };
   }
 
+  await fillMissingShootingDatesForGroups([sourceGroupId, targetGroupId]);
+
   return {
     status: "success",
     groupId: targetGroupId,
@@ -958,6 +970,8 @@ export async function splitPhotoToNewGroup(photoId: string): Promise<ReviewGroup
     };
   }
 
+  await fillMissingShootingDatesForGroups([newGroupId, membership.item.photo_group_id]);
+
   return {
     status: "success",
     groupId: newGroupId,
@@ -1014,6 +1028,8 @@ export async function mergeGroups(sourceGroupId: string, targetGroupId: string):
       message: error.message
     };
   }
+
+  await fillMissingShootingDatesForGroups([targetGroupId]);
 
   return {
     status: "success",
@@ -1160,6 +1176,92 @@ function buildQrBoundaryPhotoSets(photos: PhotoRow[]) {
   return sets.filter((set) => set.photos.length > 0);
 }
 
+function summarizeCapturedDates(photos: Array<Pick<PhotoRow, "captured_at">>) {
+  const dates = new Set(
+    photos
+      .map((photo) => extractCapturedDate(photo.captured_at))
+      .filter((date): date is string => Boolean(date))
+  );
+  return {
+    date: dates.size === 1 ? [...dates][0] : null,
+    isMixed: dates.size >= 2
+  };
+}
+
+function extractCapturedDate(capturedAt: string | null | undefined) {
+  if (!capturedAt) {
+    return null;
+  }
+
+  const match = capturedAt.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? null;
+}
+
+async function fillMissingShootingDatesForGroups(groupIds: Array<string | null | undefined>) {
+  if (!supabase) {
+    return;
+  }
+
+  const uniqueGroupIds = [...new Set(groupIds.filter((groupId): groupId is string => Boolean(groupId)))];
+  if (uniqueGroupIds.length === 0) {
+    return;
+  }
+
+  const { data: groupData, error: groupError } = await supabase
+    .from("photo_groups")
+    .select("id,shooting_date")
+    .in("id", uniqueGroupIds);
+
+  if (groupError) {
+    return;
+  }
+
+  const missingDateGroupIds = ((groupData ?? []) as unknown as Array<{ id: string; shooting_date: string | null }>)
+    .filter((group) => !group.shooting_date)
+    .map((group) => group.id);
+  if (missingDateGroupIds.length === 0) {
+    return;
+  }
+
+  const { data: itemData, error: itemError } = await supabase
+    .from("photo_group_items")
+    .select("photo_id,photo_group_id,sort_order")
+    .in("photo_group_id", missingDateGroupIds);
+
+  if (itemError) {
+    return;
+  }
+
+  const items = (itemData ?? []) as unknown as GroupItemRow[];
+  const photoIds = [...new Set(items.map((item) => item.photo_id))];
+  if (photoIds.length === 0) {
+    return;
+  }
+
+  const { data: photoData, error: photoError } = await supabase
+    .from("photos")
+    .select("id,captured_at")
+    .in("id", photoIds);
+
+  if (photoError) {
+    return;
+  }
+
+  const photoById = new Map(((photoData ?? []) as unknown as Array<{ id: string; captured_at: string | null }>).map((photo) => [photo.id, photo]));
+
+  for (const groupId of missingDateGroupIds) {
+    const groupPhotos = items
+      .filter((item) => item.photo_group_id === groupId)
+      .map((item) => photoById.get(item.photo_id))
+      .filter((photo): photo is { id: string; captured_at: string | null } => Boolean(photo));
+    const summary = summarizeCapturedDates(groupPhotos);
+
+    if (summary.date) {
+      await supabase.from("photo_groups").update({ shooting_date: summary.date }).eq("id", groupId).is("shooting_date", null);
+    }
+  }
+}
+
 function isDetectedQrCode(photo: Pick<PhotoRow, "code_type" | "code_text">) {
   return photo.code_type?.toLowerCase() === "qrcode" && Boolean(photo.code_text?.trim());
 }
@@ -1250,6 +1352,7 @@ async function createPhotoGroupForSet(photoSet: PhotoSet): Promise<ReviewGroupEd
   const { data: groupData, error: groupError } = await supabase
     .from("photo_groups")
     .insert({
+      shooting_date: summarizeCapturedDates(ungroupedPhotos).date,
       review_status: "pending",
       export_status: "not_exported"
     })
@@ -1322,7 +1425,7 @@ async function fetchGroupDisplaySummaries(items: GroupItemRow[]) {
   const photoIds = [...new Set(items.map((item) => item.photo_id))];
   const { data, error } = await supabase
     .from("photos")
-    .select("id,original_filename,original_path,code_type,code_text,imported_at,notes")
+    .select("id,original_filename,original_path,code_type,code_text,imported_at,notes,captured_at")
     .in("id", photoIds);
 
   if (error) {
@@ -1347,10 +1450,13 @@ async function fetchGroupDisplaySummaries(items: GroupItemRow[]) {
     const representativePhoto =
       groupPhotos.find((photo) => !isQrBoundaryPhoto(photo)) ?? groupPhotos[0] ?? null;
     const noteSourcePhoto = groupPhotos.find((photo) => photo.notes);
+    const capturedDateSummary = summarizeCapturedDates(groupPhotos);
     summaries.set(groupId, {
       qrPatientCandidate: qrPhoto ? extractQrPatientCandidate(qrPhoto) : null,
       hasQrPhoto: Boolean(qrPhoto),
       qrPhotoCount: qrPhotos.length,
+      capturedDateCandidate: capturedDateSummary.date,
+      hasMixedCapturedDates: capturedDateSummary.isMixed,
       notes: noteSourcePhoto?.notes ?? null,
       representativePhotoPath: representativePhoto?.original_path ?? null,
       representativePhotoFilename: representativePhoto?.original_filename ?? null
@@ -1364,12 +1470,14 @@ function buildAttentionReasons({
   hasQrPhoto,
   patientCandidate,
   photoCount,
-  qrPhotoCount
+  qrPhotoCount,
+  hasMixedCapturedDates
 }: {
   hasQrPhoto: boolean;
   patientCandidate: string | null;
   photoCount: number;
   qrPhotoCount: number;
+  hasMixedCapturedDates: boolean;
 }) {
   const reasons: string[] = [];
 
@@ -1391,6 +1499,10 @@ function buildAttentionReasons({
 
   if (qrPhotoCount >= 2) {
     reasons.push("QR画像が複数");
+  }
+
+  if (hasMixedCapturedDates) {
+    reasons.push("撮影日を確認してください");
   }
 
   return reasons;

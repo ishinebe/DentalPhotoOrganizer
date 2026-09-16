@@ -16,7 +16,7 @@ create table if not exists public.photos (
   mime_type text,
   code_type text,
   code_text text,
-  captured_at timestamptz,
+  captured_at timestamp without time zone,
   imported_at timestamptz default now(),
   import_batch_id uuid,
   provisional_patient_id text,

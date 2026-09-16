@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import exifr from "exifr";
 import jpeg from "jpeg-js";
 import jsQrModule from "jsqr";
 import { PNG } from "pngjs";
@@ -29,6 +30,7 @@ type LocalImageFile = {
   fileHash: string;
   codeType: "qrcode" | null;
   codeText: string | null;
+  capturedAt: string | null;
 };
 
 type ImageCodeDetection = {
@@ -274,9 +276,36 @@ function registerIpcHandlers() {
 
     for (const group of payload.groups) {
       let groupHasFailure = false;
-      const shootingDate = sanitizePathSegment(group.shootingDate || "date-unknown");
-      const patientId = sanitizePathSegment(group.patientId || "patient-unknown");
-      const destinationFolder = path.join(payload.exportRootPath, shootingDate, patientId);
+      const shootingDate = group.shootingDate?.trim() ?? "";
+      const patientId = group.patientId?.trim() ?? "";
+
+      if (!patientId || !shootingDate) {
+        failedGroupIds.push(group.groupId);
+        failedPhotoCount += group.photos.length;
+        failures.push({
+          groupId: group.groupId,
+          photoId: "",
+          originalFilename: "",
+          message: "患者IDまたは撮影日が未入力のため、正式書き出しできません"
+        });
+        continue;
+      }
+
+      const safeShootingDate = sanitizePathSegment(shootingDate);
+      const safePatientId = sanitizePathSegment(patientId);
+      if (!safeShootingDate || !safePatientId || safeShootingDate === "unknown" || safePatientId === "unknown") {
+        failedGroupIds.push(group.groupId);
+        failedPhotoCount += group.photos.length;
+        failures.push({
+          groupId: group.groupId,
+          photoId: "",
+          originalFilename: "",
+          message: "患者IDまたは撮影日が正式書き出し先フォルダ名として使用できません"
+        });
+        continue;
+      }
+
+      const destinationFolder = path.join(payload.exportRootPath, safeShootingDate, safePatientId);
 
       if (group.photos.length === 0) {
         failedGroupIds.push(group.groupId);
@@ -497,12 +526,76 @@ async function collectImageFiles(folderPath: string): Promise<LocalImageFile[]> 
         fileSize: fileStat.size,
         mimeType: imageMimeTypes.get(extension) ?? "application/octet-stream",
         fileHash: await calculateSha256(originalPath),
+        capturedAt: await readExifCapturedAt(originalPath),
         ...(await detectImageCode(originalPath))
       };
     })
   );
 
   return files.sort((a, b) => a.originalFilename.localeCompare(b.originalFilename));
+}
+
+async function readExifCapturedAt(filePath: string) {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension !== ".jpg" && extension !== ".jpeg") {
+    return null;
+  }
+
+  try {
+    const metadata = (await exifr.parse(filePath, {
+      pick: ["DateTimeOriginal", "CreateDate", "DateTime"],
+      translateKeys: true,
+      translateValues: false,
+      reviveValues: false,
+      sanitize: true
+    })) as Record<string, unknown> | undefined;
+
+    return normalizeExifLocalDateTime(metadata?.DateTimeOriginal ?? metadata?.CreateDate ?? metadata?.DateTime);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeExifLocalDateTime(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const match = value.trim().match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day, hour, minute, second] = match;
+  const yearNumber = Number.parseInt(year, 10);
+  const monthNumber = Number.parseInt(month, 10);
+  const dayNumber = Number.parseInt(day, 10);
+  const hourNumber = Number.parseInt(hour, 10);
+  const minuteNumber = Number.parseInt(minute, 10);
+  const secondNumber = Number.parseInt(second, 10);
+
+  if (
+    monthNumber < 1 ||
+    monthNumber > 12 ||
+    dayNumber < 1 ||
+    dayNumber > 31 ||
+    hourNumber > 23 ||
+    minuteNumber > 59 ||
+    secondNumber > 59
+  ) {
+    return null;
+  }
+
+  const checkedDate = new Date(Date.UTC(yearNumber, monthNumber - 1, dayNumber));
+  if (
+    checkedDate.getUTCFullYear() !== yearNumber ||
+    checkedDate.getUTCMonth() !== monthNumber - 1 ||
+    checkedDate.getUTCDate() !== dayNumber
+  ) {
+    return null;
+  }
+
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
 }
 
 async function detectImageCode(filePath: string): Promise<ImageCodeDetection> {
