@@ -621,12 +621,6 @@ function formatDate(value: string | null) {
   return value || "-";
 }
 
-function getExportFilename(photo: ExportGroupPhoto, index: number) {
-  const extensionMatch = photo.original_filename.match(/\.[^.]+$/);
-  const extension = extensionMatch?.[0].toLowerCase() ?? ".jpg";
-  return `${String(index + 1).padStart(3, "0")}${extension}`;
-}
-
 function buildOfficialExportFolderPath(exportRootPath: string, group: ExportGroup) {
   const separator = exportRootPath.includes("\\") ? "\\" : "/";
   const root = exportRootPath.replace(/[\\/]+$/, "");
@@ -2209,6 +2203,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
     successGroupCount: number;
     successPhotoCount: number;
     failedPhotoCount: number;
+    duplicateSkippedPhotoCount: number;
     failures: Array<{ originalFilename: string; message: string }>;
   } | null>(null);
 
@@ -2344,11 +2339,10 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
         groupId: group.id,
         patientId: group.patient_id,
         shootingDate: group.shooting_date,
-        photos: group.photos.map((photo, index) => ({
+        photos: group.photos.map((photo) => ({
           photoId: photo.id,
           originalPath: photo.original_path,
-          originalFilename: photo.original_filename,
-          exportFilename: getExportFilename(photo, index)
+          originalFilename: photo.original_filename
         }))
       }))
     };
@@ -2376,6 +2370,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
         successGroupCount: copyResult.successGroupIds.length,
         successPhotoCount: copyResult.successPhotoCount,
         failedPhotoCount: copyResult.failedPhotoCount,
+        duplicateSkippedPhotoCount: copyResult.duplicateSkippedPhotoCount,
         failures: copyResult.failures.map((failure) => ({
           originalFilename: failure.originalFilename || "写真",
           message: failure.message
@@ -2584,6 +2579,9 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
                 <dd>{resultSummary.failedPhotoCount}枚</dd>
               </div>
             </dl>
+            {resultSummary.duplicateSkippedPhotoCount > 0 && (
+              <p>重複のためコピーしなかった写真: {resultSummary.duplicateSkippedPhotoCount}枚</p>
+            )}
             {resultSummary.failures.length > 0 && (
               <div className="export-failure-list">
                 <strong>失敗</strong>

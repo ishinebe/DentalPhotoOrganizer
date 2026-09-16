@@ -26,7 +26,6 @@ export type ExportPhotoFilePayload = {
   photoId: string;
   originalPath: string | null;
   originalFilename: string;
-  exportFilename: string;
 };
 
 export type ExportPhotoGroupPayload = {
@@ -54,6 +53,7 @@ export type ExportPhotoFilesResult = {
   failedGroupIds: string[];
   successPhotoCount: number;
   failedPhotoCount: number;
+  duplicateSkippedPhotoCount: number;
   failures: ExportPhotoFileFailure[];
 };
 

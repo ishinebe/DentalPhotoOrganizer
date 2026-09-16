@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { constants, createReadStream } from "node:fs";
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -40,7 +40,6 @@ type ExportPhotoPayload = {
   photoId: string;
   originalPath: string | null;
   originalFilename: string;
-  exportFilename: string;
 };
 
 type ExportGroupPayload = {
@@ -60,6 +59,11 @@ type ExportFailure = {
   photoId: string;
   originalFilename: string;
   message: string;
+};
+
+type ExportDestinationState = {
+  nextSequenceNumber: number;
+  hashes: Set<string>;
 };
 
 type QrDecoder = (data: Uint8ClampedArray, width: number, height: number) => { data: string } | null;
@@ -248,6 +252,7 @@ function registerIpcHandlers() {
         failedGroupIds: [],
         successPhotoCount: 0,
         failedPhotoCount: 0,
+        duplicateSkippedPhotoCount: 0,
         failures: [
           {
             groupId: "",
@@ -262,8 +267,10 @@ function registerIpcHandlers() {
     const successGroupIds: string[] = [];
     const failedGroupIds: string[] = [];
     const failures: ExportFailure[] = [];
+    const destinationStateCache = new Map<string, ExportDestinationState>();
     let successPhotoCount = 0;
     let failedPhotoCount = 0;
+    let duplicateSkippedPhotoCount = 0;
 
     for (const group of payload.groups) {
       let groupHasFailure = false;
@@ -311,8 +318,28 @@ function registerIpcHandlers() {
         }
 
         try {
-          const destinationPath = await resolveUniqueDestinationPath(destinationFolder, photo.exportFilename);
-          await copyFile(photo.originalPath, destinationPath);
+          const destinationState = await getExportDestinationState(destinationFolder, destinationStateCache);
+          const sourceHash = await calculateSha256(photo.originalPath);
+
+          if (destinationState.hashes.has(sourceHash)) {
+            duplicateSkippedPhotoCount += 1;
+            continue;
+          }
+
+          const copyStatus = await copyPhotoToNextSequence(
+            photo.originalPath,
+            photo.originalFilename,
+            sourceHash,
+            destinationFolder,
+            destinationState
+          );
+
+          if (copyStatus === "duplicate") {
+            duplicateSkippedPhotoCount += 1;
+            continue;
+          }
+
+          destinationState.hashes.add(sourceHash);
           successPhotoCount += 1;
         } catch (error) {
           groupHasFailure = true;
@@ -339,6 +366,7 @@ function registerIpcHandlers() {
       failedGroupIds: [...new Set(failedGroupIds)],
       successPhotoCount,
       failedPhotoCount,
+      duplicateSkippedPhotoCount,
       failures
     };
   });
@@ -358,24 +386,89 @@ function sanitizePathSegment(value: string) {
   return sanitized.length > 0 ? sanitized : "unknown";
 }
 
-async function resolveUniqueDestinationPath(destinationFolder: string, exportFilename: string) {
-  const parsed = path.parse(sanitizeExportFilename(exportFilename));
-  let candidate = path.join(destinationFolder, `${parsed.name}${parsed.ext}`);
-  let index = 1;
-
-  while (existsSync(candidate)) {
-    candidate = path.join(destinationFolder, `${parsed.name}_${index}${parsed.ext}`);
-    index += 1;
+async function getExportDestinationState(destinationFolder: string, cache: Map<string, ExportDestinationState>) {
+  const cached = cache.get(destinationFolder);
+  if (cached) {
+    return cached;
   }
 
-  return candidate;
+  const state = await readExportDestinationState(destinationFolder);
+  cache.set(destinationFolder, state);
+  return state;
 }
 
-function sanitizeExportFilename(filename: string) {
-  const parsed = path.parse(filename);
-  const safeName = sanitizePathSegment(parsed.name || "photo");
-  const safeExt = parsed.ext.replace(/[^a-zA-Z0-9.]/g, "").toLowerCase();
-  return `${safeName}${safeExt || ".jpg"}`;
+async function copyPhotoToNextSequence(
+  originalPath: string,
+  originalFilename: string,
+  sourceHash: string,
+  destinationFolder: string,
+  destinationState: ExportDestinationState
+) {
+  const extension = getExportExtension(originalFilename);
+
+  while (true) {
+    const destinationPath = path.join(destinationFolder, `${String(destinationState.nextSequenceNumber).padStart(3, "0")}${extension}`);
+    destinationState.nextSequenceNumber += 1;
+
+    try {
+      await copyFile(originalPath, destinationPath, constants.COPYFILE_EXCL);
+      return "copied";
+    } catch (error) {
+      if (isFileAlreadyExistsError(error)) {
+        const refreshedState = await readExportDestinationState(destinationFolder);
+        destinationState.nextSequenceNumber = Math.max(destinationState.nextSequenceNumber, refreshedState.nextSequenceNumber);
+        for (const hash of refreshedState.hashes) {
+          destinationState.hashes.add(hash);
+        }
+        if (destinationState.hashes.has(sourceHash)) {
+          return "duplicate";
+        }
+        continue;
+      }
+
+      throw error;
+    }
+  }
+}
+
+async function readExportDestinationState(destinationFolder: string) {
+  const entries = await readdir(destinationFolder, { withFileTypes: true });
+  let maxSequenceNumber = 0;
+  const hashes = new Set<string>();
+
+  await Promise.all(
+    entries.map(async (entry) => {
+      if (!entry.isFile()) {
+        return;
+      }
+
+      const extension = path.extname(entry.name).toLowerCase();
+      if (!imageMimeTypes.has(extension)) {
+        return;
+      }
+
+      const parsed = path.parse(entry.name);
+      if (/^\d+$/.test(parsed.name)) {
+        maxSequenceNumber = Math.max(maxSequenceNumber, Number.parseInt(parsed.name, 10));
+      }
+
+      hashes.add(await calculateSha256(path.join(destinationFolder, entry.name)));
+    })
+  );
+
+  return {
+    nextSequenceNumber: maxSequenceNumber + 1,
+    hashes
+  };
+}
+
+function getExportExtension(filename: string) {
+  const extension = path.extname(filename).toLowerCase();
+  return imageMimeTypes.has(extension) ? extension : ".jpg";
+}
+
+function isFileAlreadyExistsError(error: unknown) {
+  return error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "EEXIST";
 }
 
 function getErrorMessage(error: unknown) {
