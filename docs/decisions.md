@@ -286,3 +286,60 @@ Patient ID and shooting date are core to the target storage workflow. Attending 
 
 Status:
 Accepted
+
+
+---
+
+## Decision 0017
+
+Title:
+Support automatic import from approved removable media.
+
+Reason:
+Clinical photographs are often stored on camera SD cards after daily clinical work.
+Requiring users to manually start every import increases repetitive work and may delay photograph organization.
+
+Decision:
+DentalPhotoOrganizer supports automatic detection and import of new photographs from approved removable media such as camera SD cards.
+Source media is treated as read-only and files on the source media must not be modified, deleted, renamed, overwritten, or moved.
+
+Status:
+Accepted
+
+---
+
+## Decision 0018
+
+Title:
+Create and verify a preservation copy before downstream processing.
+
+Reason:
+Later classification and organization should not depend on the SD card remaining connected.
+Medical photograph data must also remain verifiable after import.
+
+Decision:
+Automatic import first creates a 保全コピー in a managed local storage area.
+The application verifies that the preservation copy matches the source using appropriate checks such as file size and/or hash comparison before treating import as complete.
+After successful verification, downstream processing uses the preservation copy rather than depending on the removable source media.
+
+Status:
+Accepted
+
+---
+
+## Decision 0019
+
+Title:
+Background automation stops before human confirmation and export.
+
+Reason:
+Automatic grouping and classification may be incorrect, and mixed-patient photographs are a significant safety risk.
+
+Decision:
+バックグラウンド整理 may perform QR/barcode analysis, patient ID candidate extraction, grouping, photo-type classification, confidence calculation, and other automated preparation.
+It may prepare patient photo set candidates and route results to 確認待ち or 要整理写真.
+It must not automatically perform 確認完了 or final 書き出し.
+Human photo review remains mandatory before export.
+
+Status:
+Accepted
