@@ -373,6 +373,37 @@ Rules:
 - Users should be able to inspect larger images when thumbnails are insufficient.
 - Photo display should reduce cognitive load during repetitive review work.
 
+## If modifying automatic import or background organization
+
+Read in this order:
+
+1. docs/principles.md
+2. docs/decisions.md
+3. docs/workflow.md
+4. docs/glossary.md
+
+Important concepts:
+
+- 原本画像
+- 保全コピー
+- 取り込んだ写真
+- 自動取り込み
+- バックグラウンド整理
+- 自動分類
+- 分類信頼度
+- 要整理写真
+- 写真確認
+
+Rules:
+
+- Treat removable source media as read-only.
+- Do not modify, delete, rename, overwrite, or move files on source media.
+- Create and verify a 保全コピー before considering automatic import complete.
+- After successful preservation-copy verification, downstream processing should not depend on the removable media remaining connected.
+- Background organization may continue after import, including overnight.
+- Background organization must stop before 確認完了 and 書き出し.
+- Human photo review remains mandatory regardless of classification confidence.
+
 ## Non-Negotiable Rules
 
 The following rules must not be violated:
