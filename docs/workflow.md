@@ -64,6 +64,49 @@ Important rules:
 - Import must not rename or move original files as part of routine processing.
 - Import should preserve enough information for later verification.
 
+## Automatic Import from Removable Media
+
+DentalPhotoOrganizer may automatically begin import when approved removable media, such as a camera SD card, is detected.
+
+During automatic import:
+
+- The application detects new image files on the source media.
+- The source media is treated as read-only.
+- The application creates a 保全コピー in a managed local storage area.
+- The preservation copy is verified using appropriate checks such as file size and/or hash comparison.
+- Only after successful verification is the photo treated as successfully imported and registered as an imported photo.
+- Duplicate photographs should not be imported repeatedly.
+- After preservation-copy verification, later processing must not depend on the SD card remaining connected.
+
+Important rules:
+
+- Automatic import must not modify, delete, rename, overwrite, or move source files.
+- A failed or incomplete preservation copy must not be treated as a successful import.
+- Automatic import does not perform 写真確認, 確認完了, or 書き出し.
+
+## Background Organization Workflow
+
+After preservation-copy verification and import registration, the application may continue organizing photographs without constant user interaction.
+
+Background organization may include:
+
+- QR code and barcode analysis.
+- Patient ID candidate extraction.
+- Creation of candidate 患者写真セット.
+- Photo-type classification.
+- Classification-confidence calculation.
+- Detection of photographs that should remain 要整理写真.
+
+Background organization may begin immediately after import and may continue in the background or overnight.
+
+Important rules:
+
+- Background organization must stop before 確認完了.
+- Background organization must not automatically perform 書き出し.
+- Candidate patient photo sets remain subject to human 写真確認.
+- High classification confidence must not bypass human photo review.
+- The intended automated end state is 確認待ち or 要整理写真, not 確認済み or 書き出し済み.
+
 ## Provisional Patient Grouping
 
 During provisional grouping:
