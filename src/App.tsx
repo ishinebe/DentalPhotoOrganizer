@@ -91,7 +91,7 @@ type ReviewActionStatus =
   | "分け直し中"
   | "分け直し成功"
   | "分け直し失敗";
-type PreviewStatus = "未選択" | "読み込み中" | "表示中" | "読み込み失敗" | "未対応形式" | "Electron API未接続";
+type PreviewStatus = "未選択" | "読み込み中" | "表示中" | "読み込み失敗" | "未対応形式" | "表示不可";
 type ExportLoadStatus = "読み込み中" | "表示中" | "データなし" | "取得失敗" | "Supabase未設定";
 type ExportActionStatus = "待機中" | "フォルダ選択中" | "書き出し中" | "書き出し完了" | "書き出し失敗";
 
@@ -600,22 +600,6 @@ function getGroupPatientCandidate(group: ReviewGroup | null) {
   return group?.patient_id ?? group?.qr_patient_candidate ?? null;
 }
 
-function getReviewStatusLabel(status: ReviewGroup["review_status"]) {
-  if (status === "pending") {
-    return "未確認";
-  }
-
-  if (status === "approved") {
-    return "確認完了";
-  }
-
-  if (status === "reviewing") {
-    return "確認中";
-  }
-
-  return "差し戻し";
-}
-
 function getAttentionReasonText(group: ReviewGroup | null) {
   return group?.attention_reasons.length ? group.attention_reasons.join(" / ") : "なし";
 }
@@ -717,6 +701,34 @@ function getMissingReviewFields(form: ReviewGroupForm) {
   return missingFields;
 }
 
+function getReviewActionMessage(status: ReviewActionStatus) {
+  const messages: Record<Exclude<ReviewActionStatus, "待機中">, string> = {
+    一時保存中: "入力内容を保存しています。",
+    一時保存成功: "入力内容を一時保存しました。",
+    一時保存失敗: "入力内容を保存できませんでした。もう一度お試しください。",
+    確認完了中: "確認内容を保存しています。",
+    確認完了成功: "写真確認を完了しました。",
+    確認完了失敗: "確認を完了できませんでした。もう一度お試しください。",
+    差し戻し中: "確認待ちに戻しています。",
+    差し戻し成功: "確認待ちに戻しました。",
+    差し戻し失敗: "確認待ちに戻せませんでした。",
+    移動中: "写真を移動しています。",
+    移動成功: "写真を移動しました。",
+    移動失敗: "写真を移動できませんでした。",
+    分離中: "写真を新しい患者として分けています。",
+    分離成功: "写真を新しい患者として分けました。",
+    分離失敗: "写真を分けられませんでした。",
+    統合中: "同じ患者の写真としてまとめています。",
+    統合成功: "同じ患者の写真としてまとめました。",
+    統合失敗: "写真をまとめられませんでした。",
+    分け直し中: "写真を患者ごとに分け直しています。",
+    分け直し成功: "写真を患者ごとに分け直しました。",
+    分け直し失敗: "写真を分け直せませんでした。"
+  };
+
+  return status === "待機中" ? "" : messages[status];
+}
+
 function getPhotoSlotLabel(index: number) {
   const labels = ["正面", "左側", "右側", "上顎", "下顎"];
   return labels[index] ?? `写真${index + 1}`;
@@ -745,7 +757,7 @@ function Review({
   const [photoThumbnailUrls, setPhotoThumbnailUrls] = useState<Record<string, string>>({});
   const [photoTypeDrafts, setPhotoTypeDrafts] = useState<Record<string, PhotoTypeValue>>({});
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
-  const [staffMessage, setStaffMessage] = useState("スタッフ一覧を読み込んでいます");
+  const [staffWarning, setStaffWarning] = useState<string | null>(null);
   const [moveTargetGroupId, setMoveTargetGroupId] = useState("");
   const [mergeTargetGroupId, setMergeTargetGroupId] = useState("");
   const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
@@ -785,7 +797,6 @@ function Review({
   const canGoToPreviousPhoto = selectedPhotoIndex > 0;
   const canGoToNextPhoto = selectedPhotoIndex >= 0 && selectedPhotoIndex < intraoralPhotos.length - 1;
   const selectedPatientCandidate = getGroupPatientCandidate(selectedGroup);
-  const selectedAttentionReasons = getAttentionReasonText(selectedGroup);
   const otherGroups = useMemo(
     () => (selectedGroup ? groups.filter((group) => group.id !== selectedGroup.id) : []),
     [groups, selectedGroup]
@@ -886,7 +897,7 @@ function Review({
       }
 
       setStaffMembers(result.staff);
-      setStaffMessage(result.message);
+      setStaffWarning(result.status === "success" ? null : "スタッフ一覧を読み込めませんでした。必要な情報は後で入力できます。");
     });
 
     return () => {
@@ -1091,15 +1102,15 @@ function Review({
 
     if (!selectedPhoto.original_path) {
       setPreviewStatus("読み込み失敗");
-      setPreviewMessage("original_path が空です");
+      setPreviewMessage("写真を読み込めませんでした");
       return () => {
         isCurrent = false;
       };
     }
 
     if (!window.electronAPI?.loadImagePreview) {
-      setPreviewStatus("Electron API未接続");
-      setPreviewMessage("Electronウィンドウ内でのみローカル画像をプレビューできます");
+      setPreviewStatus("表示不可");
+      setPreviewMessage("写真を表示できません。アプリを再起動してください。");
       return () => {
         isCurrent = false;
       };
@@ -1124,7 +1135,7 @@ function Review({
 
         setPreviewDataUrl(null);
         setPreviewStatus(result.status === "unsupported" ? "未対応形式" : "読み込み失敗");
-        setPreviewMessage(result.message);
+        setPreviewMessage(result.status === "unsupported" ? "この形式の写真は表示できません" : "写真を読み込めませんでした");
       })
       .catch(() => {
         if (!isCurrent) {
@@ -1477,7 +1488,7 @@ function Review({
   return (
     <div className="review-page">
       <div className="review-guidance">
-        AIが同じ患者と思われる写真をまとめました。写真と患者情報を確認し、問題がなければ確認完了してください。
+        同じ患者と思われる写真をまとめています。写真のまとまりと患者情報を確認してください。
       </div>
       <div className="review-mode-tabs" role="tablist" aria-label="確認状態の切り替え">
         <button
@@ -1503,19 +1514,26 @@ function Review({
           <h2>患者ごとの写真一覧</h2>
           <span>{groups.length}件</span>
         </div>
-        <div className={`review-status ${loadStatus === "取得失敗" ? "error" : ""}`}>
-          <strong>{loadStatus}</strong>
-          <span>{message}</span>
-        </div>
-        <button className="review-refresh-button" type="button" onClick={() => void loadGroups()} disabled={isBusy}>
-          <RefreshCw size={16} />
-          再読み込み
-        </button>
-        {reviewListStatus === "pending" && (
-          <button className="review-refresh-button" type="button" onClick={handleRegroupByQrBoundaries} disabled={isBusy}>
-            QRをもとに患者ごとに分け直す
-          </button>
+        {(loadStatus === "取得失敗" || loadStatus === "Supabase未設定") && (
+          <div className="review-status error" role="alert">
+            <strong>患者情報を読み込めませんでした</strong>
+            <span>データベースの設定を確認して、もう一度お試しください。</span>
+          </div>
         )}
+        <details className="review-other-actions">
+          <summary>その他の操作</summary>
+          <div>
+            <button className="review-refresh-button" type="button" onClick={() => void loadGroups()} disabled={isBusy}>
+              <RefreshCw size={16} />
+              再読み込み
+            </button>
+            {reviewListStatus === "pending" && (
+              <button className="review-refresh-button" type="button" onClick={handleRegroupByQrBoundaries} disabled={isBusy}>
+                QRをもとに患者ごとに分け直す
+              </button>
+            )}
+          </div>
+        </details>
         {reviewListStatus === "pending" && (
           <div
             className={[
@@ -1559,24 +1577,14 @@ function Review({
                 )}
               </div>
               <div className="set-summary">
-                <strong>患者 {index + 1}</strong>
-                <span>患者ID候補: {getGroupPatientCandidate(group) ?? "なし"}</span>
-                <span>
-                  {group.photo_count}枚 / {group.has_qr_photo ? "QRあり" : "QRなし"}
-                </span>
+                <strong>{getGroupPatientCandidate(group) ?? "患者ID未設定"}</strong>
+                <span>{group.photo_count}枚</span>
                 {reviewListStatus === "approved" && (
-                  <>
-                    <span>撮影日: {formatDate(group.shooting_date)}</span>
-                    <span>出力状態: {group.export_status}</span>
-                    <small>確認日時: {formatDateTime(group.approved_at)}</small>
-                  </>
+                  <span>撮影日: {formatDate(group.shooting_date)}</span>
                 )}
-                <div className="set-badges">
-                  <em>{getReviewStatusLabel(group.review_status)}</em>
-                  {group.needs_review_label && <b>要確認</b>}
-                </div>
-                {group.needs_review_label && <small className="attention-reasons">理由: {getAttentionReasonText(group)}</small>}
-                <small>{formatDateTime(group.created_at)}</small>
+                {group.needs_review_label && (
+                  <small className="attention-reasons">要確認: {getAttentionReasonText(group)}</small>
+                )}
               </div>
             </button>
           ))}
@@ -1602,29 +1610,6 @@ function Review({
         </div>
         {selectedGroup ? (
           <div className="review-detail">
-            <section className={selectedGroup.needs_review_label ? "set-overview attention" : "set-overview"}>
-              <div className="set-overview-header">
-                <div>
-                  <h3>写真セット概要</h3>
-                  <p>患者の取り違えを防ぐため、最終確認は人が行います。</p>
-                </div>
-                {selectedGroup.needs_review_label ? <strong>要確認</strong> : <strong className="clear">通常確認</strong>}
-              </div>
-              <dl>
-                <div>
-                  <dt>写真枚数</dt>
-                  <dd>{selectedGroup.photo_count}枚</dd>
-                </div>
-                <div>
-                  <dt>QR</dt>
-                  <dd>{selectedGroup.has_qr_photo ? `QRあり (${selectedGroup.qr_photo_count}枚)` : "QRなし"}</dd>
-                </div>
-                <div>
-                  <dt>要確認理由</dt>
-                  <dd>{selectedAttentionReasons}</dd>
-                </div>
-              </dl>
-            </section>
             <div className={`preview-frame ${previewStatus === "表示中" && selectedPhoto ? "ready" : ""}`}>
               {selectedPhoto && intraoralPhotos.length > 1 && (
                 <>
@@ -1728,20 +1713,6 @@ function Review({
                   <strong>{getPhotoTypeLabel(getDraftPhotoType(photo))}</strong>
                   <span>{photo.original_filename}</span>
                   </button>
-                  <label className="photo-type-select">
-                    撮影種別
-                    <select
-                      value={getDraftPhotoType(photo)}
-                      onChange={(event) => updatePhotoTypeDraft(photo.id, event.target.value)}
-                      disabled={isBusy || isApprovedMode}
-                    >
-                      {getSelectablePhotoTypeOptionsForProtocol(form.photo_protocol, getDraftPhotoType(photo)).map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
                 </article>
               ))}
               {groupPhotos.length === 0 ? (
@@ -1772,90 +1743,11 @@ function Review({
                       </span>
                       <div className="qr-auxiliary-meta">
                         <strong>{photo.original_filename}</strong>
-                        <label className="photo-type-select">
-                          撮影種別
-                          <select
-                            value={getDraftPhotoType(photo)}
-                            onChange={(event) => updatePhotoTypeDraft(photo.id, event.target.value)}
-                            disabled={isBusy || isApprovedMode}
-                          >
-                            {getSelectablePhotoTypeOptionsForProtocol(form.photo_protocol, getDraftPhotoType(photo)).map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <span>患者確認の補助画像</span>
                       </div>
                     </article>
                   ))}
                 </div>
-              </details>
-            )}
-            {selectedPhoto && (
-              <section className="selected-photo-summary">
-                <h3>選択中の写真</h3>
-                <dl>
-                  <div>
-                    <dt>ファイル名</dt>
-                    <dd>{selectedPhoto.original_filename}</dd>
-                  </div>
-                  <div>
-                    <dt>撮影種別</dt>
-                    <dd>{getPhotoTypeLabel(getDraftPhotoType(selectedPhoto))}</dd>
-                  </div>
-                  <div>
-                    <dt>QR情報</dt>
-                    <dd>{isQrPhoto(selectedPhoto) ? "QR情報あり" : "QR情報なし"}</dd>
-                  </div>
-                </dl>
-              </section>
-            )}
-            {selectedPhoto && (
-              <details className="technical-detail-panel">
-                <summary>写真の詳細情報を表示</summary>
-                <dl className="detail-list">
-                  <div>
-                    <dt>original_filename</dt>
-                    <dd>{selectedPhoto.original_filename}</dd>
-                  </div>
-                  <div>
-                    <dt>original_path</dt>
-                    <dd>{selectedPhoto.original_path ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>file_hash</dt>
-                    <dd>{selectedPhoto.file_hash ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>mime_type</dt>
-                    <dd>{selectedPhoto.mime_type ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>Code Type</dt>
-                    <dd>{selectedPhoto.code_type ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>Code Text</dt>
-                    <dd>{selectedPhoto.code_text ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>file_size</dt>
-                    <dd>{formatFileSize(selectedPhoto.file_size ?? 0)}</dd>
-                  </div>
-                  <div>
-                    <dt>imported_at</dt>
-                    <dd>{formatDateTime(selectedPhoto.imported_at ?? null)}</dd>
-                  </div>
-                  <div>
-                    <dt>review_status</dt>
-                    <dd>{selectedPhoto.review_status ?? "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>export_status</dt>
-                    <dd>{selectedPhoto.export_status ?? "-"}</dd>
-                  </div>
-                </dl>
               </details>
             )}
           </div>
@@ -1870,83 +1762,10 @@ function Review({
       <aside className="metadata-column">
         <div className="column-title">
           <h2>患者情報・写真確認</h2>
-          <span>{actionStatus}</span>
+          {actionStatus !== "待機中" && <span>{actionStatus}</span>}
         </div>
         <form className="metadata-form">
-          {reviewListStatus === "pending" ? (
-            <section className="metadata-section confirmation-section">
-              <h3>確認チェック</h3>
-              <p>写真と患者情報を確認し、同じ患者の写真セットであれば確認完了してください。</p>
-              <div className="photo-type-check-panel">
-                <strong>撮影基準チェック</strong>
-                {selectedPhotoProtocol.value === "partial" ? (
-                  <p className="photo-type-check-message">部分撮影として確認します。不足判定は行いません。</p>
-                ) : selectedPhotoProtocol.value === "other" ? (
-                  <p className="photo-type-check-message">その他の撮影方法として確認します。不足判定は行いません。</p>
-                ) : photoTypeCheck.missingRequiredTypes.length === 0 ? (
-                  <p className="photo-type-check-message complete">
-                    {selectedPhotoProtocol.label}の基本写真が揃っています
-                  </p>
-                ) : (
-                  <div className="photo-type-check-section">
-                    <p>{selectedPhotoProtocol.label}で確認が必要な写真</p>
-                    <span>不足している可能性があります</span>
-                    <ul>
-                      {photoTypeCheck.missingRequiredTypes.map((item) => (
-                        <li key={item.value}>{item.label}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {(photoTypeCheck.otherCount > 0 || photoTypeCheck.unclassifiedCount > 0) && (
-                  <div className="photo-type-check-cautions">
-                    {photoTypeCheck.otherCount > 0 && (
-                      <div>
-                        <p>基本分類以外の写真があります</p>
-                        <span>要確認: その他 {photoTypeCheck.otherCount}枚</span>
-                      </div>
-                    )}
-                    {photoTypeCheck.unclassifiedCount > 0 && (
-                      <div>
-                        <p>未分類の写真があります</p>
-                        <span>要確認: 未分類 {photoTypeCheck.unclassifiedCount}枚</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="confirmation-actions">
-                <div className="confirmation-action-card primary">
-                  <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
-                    <CheckCircle2 size={18} />
-                    確認完了
-                  </button>
-                  <p>写真と患者情報を確認済みにし、書き出し待ちにします。</p>
-                </div>
-                <div className="confirmation-action-card">
-                  <button className="secondary-action-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
-                    一時保存
-                  </button>
-                  <p>入力内容を保存します。確認完了にはしません。</p>
-                </div>
-              </div>
-            </section>
-          ) : (
-            <div className="return-review-panel">
-              <p>この患者の写真を確認待ちに戻します。患者IDや担当医などを再編集できます。</p>
-              {selectedGroup?.export_status === "exported" && (
-                <strong>この患者は書き出し済みのため、確認待ちには戻せません。</strong>
-              )}
-              <button
-                className="secondary-action-button"
-                type="button"
-                onClick={handleReturnToPending}
-                disabled={!canReturnToPending || isBusy}
-              >
-                確認待ちに戻す
-              </button>
-            </div>
-          )}
+          <div className="metadata-scroll-body">
           <section className="metadata-section">
             <h3>患者情報</h3>
             <label>
@@ -1981,6 +1800,9 @@ function Review({
                 ))}
               </select>
             </label>
+          </section>
+          <section className="metadata-section additional-information-section">
+            <h3>追加情報</h3>
             <label>
               担当医
               <select
@@ -2020,12 +1842,49 @@ function Review({
                 placeholder="確認内容や申し送りを入力"
               />
             </label>
-            <p className="staff-load-message">{staffMessage}</p>
+            {staffWarning && <p className="staff-load-message warning">{staffWarning}</p>}
+          </section>
+          <section className="metadata-section photo-standard-section">
+            <h3>撮影基準</h3>
+            <div className="photo-type-check-panel">
+              {selectedPhotoProtocol.value === "partial" ? (
+                <p className="photo-type-check-message">部分撮影として確認します</p>
+              ) : selectedPhotoProtocol.value === "other" ? (
+                <p className="photo-type-check-message">その他の撮影方法として確認します</p>
+              ) : photoTypeCheck.missingRequiredTypes.length === 0 ? (
+                <p className="photo-type-check-message complete">
+                  ✓ {selectedPhotoProtocol.label}の基本写真が揃っています
+                </p>
+              ) : (
+                <div className="photo-type-check-section">
+                  <p>⚠ {selectedPhotoProtocol.label}：不足している可能性があります</p>
+                  <ul>
+                    {photoTypeCheck.missingRequiredTypes.map((item) => (
+                      <li key={item.value}>{item.label}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {(photoTypeCheck.otherCount > 0 || photoTypeCheck.unclassifiedCount > 0) && (
+                <div className="photo-type-check-cautions">
+                  {photoTypeCheck.otherCount > 0 && (
+                    <div>
+                      <span>⚠ その他 {photoTypeCheck.otherCount}枚</span>
+                    </div>
+                  )}
+                  {photoTypeCheck.unclassifiedCount > 0 && (
+                    <div>
+                      <span>⚠ 未分類 {photoTypeCheck.unclassifiedCount}枚</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </section>
           {reviewListStatus === "pending" && (
-            <section className="metadata-section photo-organization-section">
-              <h3>別患者の写真が混ざっていた場合</h3>
-              <p>写真のまとまりに問題がある場合だけ使う補助操作です。</p>
+            <details className="photo-organization-section">
+              <summary>写真のまとまりを修正</summary>
+              <div className="photo-organization-content">
               <div className="selected-photo-line">
                 <span>選択中の写真</span>
                 <strong>{selectedPhoto ? selectedPhoto.original_filename : "写真未選択"}</strong>
@@ -2088,9 +1947,38 @@ function Review({
                   同じ患者の写真としてまとめる
                 </button>
               </div>
+              </div>
+            </details>
+          )}
+          {actionStatus !== "待機中" && <p className="review-action-message">{getReviewActionMessage(actionStatus)}</p>}
+          {reviewListStatus === "approved" && (
+            <div className="return-review-panel">
+              <p>内容を修正する場合は確認待ちに戻してください。</p>
+              {selectedGroup?.export_status === "exported" && (
+                <strong>この患者は書き出し済みのため、確認待ちには戻せません。</strong>
+              )}
+              <button
+                className="secondary-action-button"
+                type="button"
+                onClick={handleReturnToPending}
+                disabled={!canReturnToPending || isBusy}
+              >
+                確認待ちに戻す
+              </button>
+            </div>
+          )}
+          </div>
+          {reviewListStatus === "pending" && (
+            <section className="review-action-footer">
+              <button className="secondary-action-button" type="button" onClick={handleSave} disabled={!selectedGroup || isBusy}>
+                一時保存
+              </button>
+              <button className="primary-button approve-button" type="button" onClick={handleApprove} disabled={!selectedGroup || isBusy}>
+                <CheckCircle2 size={18} />
+                確認完了
+              </button>
             </section>
           )}
-          <p className="review-action-message">{message}</p>
         </form>
       </aside>
       </div>
