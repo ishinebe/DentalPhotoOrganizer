@@ -214,7 +214,7 @@ function App() {
               onOpenSettings={() => setActiveView("settings")}
             />
           )}
-          {activeView === "import" && <Import />}
+          {activeView === "import" && <Import onOpenReview={() => setActiveView("review")} />}
           {activeView === "review" && <Review openTarget={reviewOpenTarget} onOpenTargetConsumed={clearReviewOpenTarget} />}
           {activeView === "export" && (
             <ExportView
@@ -331,12 +331,13 @@ function Dashboard({
   );
 }
 
-function Import() {
+function Import({ onOpenReview }: { onOpenReview: () => void }) {
   const [status, setStatus] = useState<ImportStatus>("フォルダ未選択");
   const [folderPath, setFolderPath] = useState<string | null>(null);
   const [files, setFiles] = useState<LocalImageFile[]>([]);
   const [isSelectingFolder, setIsSelectingFolder] = useState(false);
   const [result, setResult] = useState<ImportPhotosResult | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const isElectronApiConnected = typeof window.electronAPI?.selectImageFolder === "function";
 
   const canSelectFolder = isElectronApiConnected && !isSelectingFolder && status !== "取込中";
@@ -347,43 +348,27 @@ function Import() {
 
     if (!electronAPI) {
       setStatus("取込失敗");
-      setResult({
-        status: "error",
-        targetCount: 0,
-        insertedCount: 0,
-        skippedCount: 0,
-        failedCount: 1,
-        message: "フォルダ選択を利用できません。アプリのウィンドウで起動してください"
-      });
+      setSelectionError("写真フォルダを選択できません。アプリを再起動してください。");
       return;
     }
 
     setIsSelectingFolder(true);
-    setResult(null);
+    setSelectionError(null);
 
     try {
       const selection = await electronAPI.selectImageFolder();
 
       if (!selection || selection.canceled) {
-        setStatus("フォルダ未選択");
-        setFolderPath(null);
-        setFiles([]);
         return;
       }
 
       setFolderPath(selection.folderPath);
       setFiles(selection.files);
+      setResult(null);
       setStatus(selection.files.length > 0 ? "フォルダ選択済み" : "対象ファイルなし");
     } catch {
       setStatus("取込失敗");
-      setResult({
-        status: "error",
-        targetCount: 0,
-        insertedCount: 0,
-        skippedCount: 0,
-        failedCount: 1,
-        message: "フォルダ選択または画像一覧取得に失敗しました"
-      });
+      setSelectionError("写真フォルダを読み込めませんでした。もう一度選択してください。");
     } finally {
       setIsSelectingFolder(false);
     }
@@ -416,114 +401,109 @@ function Import() {
           <HardDriveDownload size={24} />
           <div>
             <h2>写真を取り込む</h2>
-            <p>元画像ファイルはコピー・移動・リネームせず、患者情報の確認に使う情報だけを登録します。</p>
+            <p>元画像は変更されません。</p>
           </div>
         </div>
+
+        {!isElectronApiConnected && (
+          <div className="api-diagnostic disconnected" role="alert">
+            <span className="status-dot danger" />
+            <div>
+              <strong>写真フォルダを選択できません。</strong>
+              <p>アプリを再起動してください。</p>
+            </div>
+          </div>
+        )}
+
+        {selectionError && isElectronApiConnected && (
+          <div className="api-diagnostic disconnected" role="alert">
+            <span className="status-dot danger" />
+            <div>
+              <strong>{selectionError}</strong>
+            </div>
+          </div>
+        )}
 
         <div className="device-box">
           <div>
-            <span>選択フォルダ</span>
+            <span>取り込むフォルダ</span>
             <strong>{folderPath ?? "フォルダ未選択"}</strong>
           </div>
           <button type="button" onClick={handleSelectFolder} disabled={!canSelectFolder}>
-            {isSelectingFolder ? "選択中" : "フォルダを選択"}
-          </button>
-        </div>
-
-        <div className={isElectronApiConnected ? "api-diagnostic connected" : "api-diagnostic disconnected"}>
-          <span className={isElectronApiConnected ? "status-dot ready" : "status-dot danger"} />
-          <div>
-            <strong>{isElectronApiConnected ? "フォルダ選択の準備ができました" : "フォルダ選択を利用できません"}</strong>
-            <p>
-              {isElectronApiConnected
-                ? "画像フォルダを選択できます"
-                : "アプリのウィンドウで開くと、画像フォルダを選択できます"}
-            </p>
-          </div>
-        </div>
-
-        <div className="import-actions">
-          <button className="primary-button" type="button" onClick={handleStartImport} disabled={!canImport}>
-            取込開始
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setStatus("フォルダ未選択");
-              setFolderPath(null);
-              setFiles([]);
-              setResult(null);
-            }}
-            disabled={status === "取込中"}
-          >
-            リセット
+            {isSelectingFolder ? "選択中…" : "フォルダを選択"}
           </button>
         </div>
 
         <div className="file-list-panel">
           <div className="column-title">
-            <h2>対象画像ファイル</h2>
-            <span>{files.length}件</span>
+            <h2>取り込む写真</h2>
+            <span>{files.length}枚</span>
           </div>
           {files.length === 0 ? (
             <div className="empty-result compact">
               <ImageIcon size={24} />
-              <span>対象画像が見つかるとここに表示されます</span>
+              <span>{folderPath ? "このフォルダに取り込める写真はありません" : "フォルダを選択してください"}</span>
             </div>
           ) : (
             <div className="file-list">
               {files.map((file) => (
                 <div className="file-row" key={file.fileHash}>
-                  <div>
-                    <strong>{file.originalFilename}</strong>
-                    <span>{file.originalPath}</span>
-                  </div>
+                  <strong>{file.originalFilename}</strong>
                   <em>{formatFileSize(file.fileSize)}</em>
                 </div>
               ))}
             </div>
           )}
         </div>
-      </section>
 
-      <aside className="status-panel">
-        <h3>状態表示</h3>
-        <div className="large-status">
-          <span className={status === "取込中" ? "pulse-dot" : "status-dot ready"} />
-          <strong>{status}</strong>
+        <div className="import-actions">
+          <button className="primary-button" type="button" onClick={handleStartImport} disabled={!canImport}>
+            {status === "取込中" ? "取り込み中…" : "写真を取り込む"}
+          </button>
         </div>
-        <ul className="process-list">
-          <li>フォルダを選択</li>
-          <li>対象画像を読み込み</li>
-          <li>重複画像を確認</li>
-          <li>QRコードを解析</li>
-          <li>患者情報として登録</li>
-        </ul>
-        <div className="import-result">
-          <h3>取込結果</h3>
-          <dl>
-            <div>
-              <dt>対象件数</dt>
-              <dd>{result?.targetCount ?? files.length}</dd>
-            </div>
-            <div>
-              <dt>登録成功</dt>
-              <dd>{result?.insertedCount ?? 0}</dd>
-            </div>
-            <div>
-              <dt>重複スキップ</dt>
-              <dd>{result?.skippedCount ?? 0}</dd>
-            </div>
-            <div>
-              <dt>失敗</dt>
-              <dd>{result?.failedCount ?? 0}</dd>
-            </div>
-          </dl>
-          <p>{result?.message ?? "取込開始後に結果が表示されます"}</p>
-        </div>
-      </aside>
+
+        {result && (
+          <div className={`import-result ${result.status === "success" ? "success" : "error"}`}>
+            <h3>取り込み結果</h3>
+            <dl>
+              <div>
+                <dt>取り込み完了</dt>
+                <dd>{result.insertedCount.toLocaleString()}枚</dd>
+              </div>
+              <div>
+                <dt>すでに取り込み済み</dt>
+                <dd>{result.skippedCount.toLocaleString()}枚</dd>
+              </div>
+              <div>
+                <dt>失敗</dt>
+                <dd>{result.failedCount.toLocaleString()}枚</dd>
+              </div>
+            </dl>
+            <p>{getImportResultMessage(result)}</p>
+            {result.insertedCount > 0 && (
+              <button className="primary-button" type="button" onClick={onOpenReview}>
+                患者情報・写真確認へ
+              </button>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
+}
+
+function getImportResultMessage(result: ImportPhotosResult) {
+  if (result.status === "not-configured") {
+    return "データベースに接続できません。設定を確認してください。";
+  }
+
+  if (result.failedCount > 0) {
+    return result.insertedCount > 0 || result.skippedCount > 0
+      ? "一部の写真を取り込めませんでした。"
+      : "写真を取り込めませんでした。";
+  }
+
+  return "写真の取り込みが完了しました。";
 }
 
 function formatFileSize(bytes: number) {

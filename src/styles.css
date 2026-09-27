@@ -159,7 +159,6 @@ button:disabled {
 .metric-card,
 .dashboard-warning,
 .import-panel,
-.status-panel,
 .patient-column,
 .thumbnail-column,
 .metadata-column,
@@ -272,15 +271,13 @@ h3 {
   color: #667085;
 }
 
-.status-row,
-.large-status {
+.status-row {
   display: inline-flex;
   align-items: center;
   gap: 9px;
 }
 
-.status-dot,
-.pulse-dot {
+.status-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -291,12 +288,6 @@ h3 {
   background: #d92d20;
 }
 
-.pulse-dot {
-  background: #1d7ed0;
-  box-shadow: 0 0 0 6px rgba(29, 126, 208, 0.15);
-}
-
-.import-layout,
 .search-layout,
 .settings-layout {
   display: grid;
@@ -310,7 +301,6 @@ h3 {
 }
 
 .import-panel,
-.status-panel,
 .form-panel,
 .results-panel,
 .app-info {
@@ -324,6 +314,12 @@ h3 {
 .search-layout .results-panel {
   min-width: 0;
   padding: 18px;
+}
+
+.import-layout {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
 }
 
 .panel-heading {
@@ -346,6 +342,10 @@ h3 {
   border: 1px solid #d8e5f0;
   border-radius: 8px;
   background: #f8fbfe;
+}
+
+.import-panel > .api-diagnostic {
+  margin: 0 0 18px;
 }
 
 .device-box span,
@@ -415,8 +415,7 @@ h3 {
 }
 
 .primary-button,
-.device-box button,
-.import-actions button:not(.primary-button) {
+.device-box button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -437,23 +436,6 @@ h3 {
 
 .primary-button:hover {
   background: #0e579d;
-}
-
-.large-status {
-  width: 100%;
-  min-height: 74px;
-  padding: 18px;
-  border-radius: 8px;
-  background: #eef6ff;
-  color: #123d67;
-}
-
-.process-list {
-  display: grid;
-  gap: 11px;
-  margin: 18px 0 0;
-  padding-left: 20px;
-  color: #475467;
 }
 
 .file-list-panel {
@@ -479,24 +461,10 @@ h3 {
   background: #f8fbfe;
 }
 
-.file-row strong,
-.file-row span {
-  display: block;
-}
-
 .file-row strong {
+  display: block;
   color: #1d2939;
   font-size: 0.92rem;
-}
-
-.file-row span {
-  max-width: 580px;
-  margin-top: 3px;
-  overflow: hidden;
-  color: #667085;
-  font-size: 0.78rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .file-row em {
@@ -508,13 +476,20 @@ h3 {
 
 .import-result {
   margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid #edf2f7;
+  padding: 18px;
+  border: 1px solid #b7dfcc;
+  border-radius: 8px;
+  background: #f4fbf7;
+}
+
+.import-result.error {
+  border-color: #f1b8b1;
+  background: #fff8f6;
 }
 
 .import-result dl {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin: 0;
 }
@@ -542,6 +517,10 @@ h3 {
   margin: 14px 0 0;
   color: #475467;
   font-size: 0.86rem;
+}
+
+.import-result .primary-button {
+  margin-top: 16px;
 }
 
 .review-page {
