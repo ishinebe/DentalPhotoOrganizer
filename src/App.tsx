@@ -11,9 +11,6 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
-  UserRound,
-  Wifi,
-  WifiOff
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 import { fetchDashboardPhotoStats, type DashboardStatsResult } from "./lib/photoStats";
@@ -60,7 +57,6 @@ import {
   updateReviewGroupMetadata
 } from "./lib/reviewGroups";
 import { fetchStaffMembers, type StaffMember } from "./lib/staff";
-import { getSupabaseConnectionStatus } from "./lib/supabase";
 
 type View = "dashboard" | "import" | "review" | "export" | "search" | "settings";
 type ImportStatus =
@@ -71,7 +67,6 @@ type ImportStatus =
   | "取込完了"
   | "取込失敗"
   | "Supabase未設定";
-type SupabaseStatus = "checking" | "success" | "failed" | "not-configured";
 type ReviewLoadStatus = "読み込み中" | "データなし" | "取得失敗" | "表示中" | "Supabase未設定";
 type ReviewActionStatus =
   | "待機中"
@@ -101,15 +96,14 @@ type ExportLoadStatus = "読み込み中" | "表示中" | "データなし" | "�
 type ExportActionStatus = "待機中" | "フォルダ選択中" | "書き出し中" | "書き出し完了" | "書き出し失敗";
 
 const emptyStats = {
-  totalPhotos: 0,
-  pendingReviews: 0,
-  importedToday: 0,
-  approvedPhotos: 0
+  pendingReviewGroups: 0,
+  readyForExportGroups: 0,
+  importedToday: 0
 };
 
 const navItems: Array<{ id: View; label: string; icon: typeof Gauge }> = [
   { id: "dashboard", label: "ホーム", icon: Gauge },
-  { id: "import", label: "写真取込", icon: FolderDown },
+  { id: "import", label: "写真取り込み", icon: FolderDown },
   { id: "review", label: "患者情報・写真確認", icon: ClipboardCheck },
   { id: "export", label: "書き出し", icon: HardDriveDownload },
   { id: "search", label: "写真検索", icon: Search },
@@ -202,10 +196,6 @@ function App() {
           })}
         </nav>
 
-        <div className="sidebar-footer">
-          <span>Phase 8-B</span>
-          <strong>正式書き出し先記録</strong>
-        </div>
       </aside>
 
       <main className="main-panel">
@@ -214,14 +204,16 @@ function App() {
             <p>口腔内写真整理ソフトウェア</p>
             <h1>{title}</h1>
           </div>
-          <div className="operator-chip">
-            <UserRound size={18} />
-            <span>受付端末 A</span>
-          </div>
         </header>
 
         <section className="content-area">
-          {activeView === "dashboard" && <Dashboard />}
+          {activeView === "dashboard" && (
+            <Dashboard
+              onOpenReview={() => setActiveView("review")}
+              onOpenExport={() => setActiveView("export")}
+              onOpenSettings={() => setActiveView("settings")}
+            />
+          )}
           {activeView === "import" && <Import />}
           {activeView === "review" && <Review openTarget={reviewOpenTarget} onOpenTargetConsumed={clearReviewOpenTarget} />}
           {activeView === "export" && (
@@ -247,32 +239,27 @@ function App() {
   );
 }
 
-function Dashboard() {
-  const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatus>("checking");
-  const [supabaseMessage, setSupabaseMessage] = useState("接続状態を確認しています");
+function Dashboard({
+  onOpenReview,
+  onOpenExport,
+  onOpenSettings
+}: {
+  onOpenReview: () => void;
+  onOpenExport: () => void;
+  onOpenSettings: () => void;
+}) {
   const [statsResult, setStatsResult] = useState<DashboardStatsResult>({
     status: "loading",
-    stats: emptyStats,
-    message: "統計情報を読み込んでいます"
+    stats: emptyStats
   });
 
   const loadDashboardData = useCallback(async () => {
-    setSupabaseStatus("checking");
-    setSupabaseMessage("接続状態を確認しています");
     setStatsResult({
       status: "loading",
-      stats: emptyStats,
-      message: "統計情報を読み込んでいます"
+      stats: emptyStats
     });
 
-    const [connectionResult, photoStatsResult] = await Promise.all([
-      getSupabaseConnectionStatus(),
-      fetchDashboardPhotoStats()
-    ]);
-
-    setSupabaseStatus(connectionResult.status);
-    setSupabaseMessage(connectionResult.message);
-    setStatsResult(photoStatsResult);
+    setStatsResult(await fetchDashboardPhotoStats());
   }, []);
 
   useEffect(() => {
@@ -280,126 +267,67 @@ function Dashboard() {
   }, [loadDashboardData]);
 
   const cards = [
-    { label: "総画像数", value: statsResult.stats.totalPhotos, icon: ImageIcon, hint: "photos 全件" },
     {
-      label: "レビュー待ち件数",
-      value: statsResult.stats.pendingReviews,
+      label: "確認待ち",
+      value: statsResult.stats.pendingReviewGroups,
+      unit: "件",
       icon: ClipboardCheck,
-      hint: "review_status = pending"
+      actionLabel: "写真を確認する",
+      onAction: onOpenReview
     },
     {
-      label: "本日の取込件数",
-      value: statsResult.stats.importedToday,
+      label: "書き出し待ち",
+      value: statsResult.stats.readyForExportGroups,
+      unit: "件",
       icon: HardDriveDownload,
-      hint: "今日の0:00以降"
+      actionLabel: "書き出しへ進む",
+      onAction: onOpenExport
     },
     {
-      label: "確認完了件数",
-      value: statsResult.stats.approvedPhotos,
-      icon: CheckCircle2,
-      hint: "review_status = approved"
+      label: "本日の取り込み",
+      value: statsResult.stats.importedToday,
+      unit: "枚",
+      icon: ImageIcon
     }
   ];
 
   return (
     <div className="dashboard-grid">
-      <section className={`dashboard-status ${statsResult.status}`}>
-        <div>
-          <span>Dashboard統計</span>
-          <strong>{getStatsStatusLabel(statsResult.status)}</strong>
-          <p>{statsResult.message}</p>
-        </div>
-        <button className="primary-button" type="button" onClick={loadDashboardData}>
-          <RefreshCw size={18} />
-          再読み込み
-        </button>
-      </section>
+      {(statsResult.status === "error" || statsResult.status === "not-configured") && (
+        <section className="dashboard-warning" role="alert">
+          <div>
+            <ShieldAlert size={22} />
+            <p>データベースに接続できません。設定を確認してください。</p>
+          </div>
+          <button className="secondary-action-button" type="button" onClick={onOpenSettings}>
+            設定を開く
+          </button>
+        </section>
+      )}
 
       {cards.map((card) => {
         const Icon = card.icon;
         return (
-          <article className="metric-card" key={card.label}>
+          <article className={card.onAction ? "metric-card task-card" : "metric-card"} key={card.label}>
             <div className="metric-icon">
               <Icon size={24} />
             </div>
-            <div>
+            <div className="metric-card-content">
               <p>{card.label}</p>
-              <strong>{card.value.toLocaleString()}</strong>
-              <span>{card.hint}</span>
+              <strong>
+                {statsResult.status === "loading" ? "--" : card.value.toLocaleString()}
+                <span>{card.unit}</span>
+              </strong>
+              {card.onAction && (
+                <button className="primary-button" type="button" onClick={card.onAction}>
+                  {card.actionLabel}
+                </button>
+              )}
             </div>
           </article>
         );
       })}
-
-      <SupabaseConnectionCard status={supabaseStatus} message={supabaseMessage} />
-
-      <section className="wide-panel">
-        <div>
-          <h2>本日の概要</h2>
-          <p>Dashboard の数値は Supabase の photos テーブルから取得しています。0件の場合も正常な状態として表示します。</p>
-        </div>
-        <div className="status-row">
-          <span className="status-dot ready" />
-          <span>元画像は不変、人間が確認完了</span>
-        </div>
-      </section>
     </div>
-  );
-}
-
-function getStatsStatusLabel(status: DashboardStatsResult["status"]) {
-  switch (status) {
-    case "loading":
-      return "読み込み中";
-    case "success":
-      return "取得成功";
-    case "error":
-      return "取得失敗";
-    case "not-configured":
-      return "Supabase未設定";
-  }
-}
-
-function SupabaseConnectionCard({ status, message }: { status: SupabaseStatus; message: string }) {
-  const statusView = {
-    checking: {
-      label: "確認中",
-      className: "checking",
-      icon: Wifi
-    },
-    success: {
-      label: "接続成功",
-      className: "success",
-      icon: Wifi
-    },
-    failed: {
-      label: "接続失敗",
-      className: "failed",
-      icon: WifiOff
-    },
-    "not-configured": {
-      label: "未設定",
-      className: "not-configured",
-      icon: ShieldAlert
-    }
-  } satisfies Record<SupabaseStatus, { label: string; className: string; icon: typeof Wifi }>;
-
-  const view = statusView[status];
-  const Icon = view.icon;
-
-  return (
-    <section className={`supabase-card ${view.className}`}>
-      <div className="supabase-card-header">
-        <div className="metric-icon">
-          <Icon size={24} />
-        </div>
-        <div>
-          <p>Supabase接続状態</p>
-          <strong>{view.label}</strong>
-        </div>
-      </div>
-      <span>{message}</span>
-    </section>
   );
 }
 
@@ -2989,7 +2917,7 @@ function SettingsView() {
           </div>
           <div>
             <dt>バージョン</dt>
-            <dd>0.9.1 Phase 8-B</dd>
+            <dd>0.9.1</dd>
           </div>
           <div>
             <dt>構成</dt>

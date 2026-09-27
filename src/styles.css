@@ -112,28 +112,6 @@ button:disabled {
   border-color: #3b74a5;
 }
 
-.sidebar-footer {
-  margin-top: auto;
-  padding: 14px;
-  border-radius: 8px;
-  background: #102f4f;
-}
-
-.sidebar-footer span,
-.sidebar-footer strong {
-  display: block;
-}
-
-.sidebar-footer span {
-  color: #b8cee4;
-  font-size: 0.78rem;
-}
-
-.sidebar-footer strong {
-  margin-top: 4px;
-  font-size: 0.9rem;
-}
-
 .main-panel {
   display: grid;
   grid-template-rows: 92px 1fr;
@@ -166,18 +144,6 @@ button:disabled {
   font-weight: 700;
 }
 
-.operator-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 13px;
-  border: 1px solid #d5e0eb;
-  border-radius: 999px;
-  color: #344054;
-  background: #f8fbfe;
-}
-
 .content-area {
   min-height: 0;
   overflow: auto;
@@ -191,9 +157,7 @@ button:disabled {
 }
 
 .metric-card,
-.dashboard-status,
-.supabase-card,
-.wide-panel,
+.dashboard-warning,
 .import-panel,
 .status-panel,
 .patient-column,
@@ -211,107 +175,32 @@ button:disabled {
 .metric-card {
   display: flex;
   gap: 16px;
-  min-height: 138px;
+  min-height: 190px;
   padding: 22px;
 }
 
-.dashboard-status {
+.dashboard-warning {
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  min-height: 104px;
-  padding: 20px 22px;
-}
-
-.dashboard-status span,
-.dashboard-status strong,
-.dashboard-status p {
-  display: block;
-  margin: 0;
-}
-
-.dashboard-status span {
-  color: #667085;
-  font-size: 0.86rem;
-}
-
-.dashboard-status strong {
-  margin-top: 4px;
-  color: #101828;
-  font-size: 1.25rem;
-}
-
-.dashboard-status p {
-  margin-top: 5px;
-  color: #475467;
-}
-
-.dashboard-status.error {
+  min-height: 76px;
+  padding: 16px 20px;
   border-color: #f1b8b1;
   background: #fff8f6;
 }
 
-.dashboard-status.not-configured {
-  border-color: #b8d7f4;
-  background: #f5faff;
-}
-
-.supabase-card {
-  grid-column: 1 / -1;
+.dashboard-warning > div {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  min-height: 110px;
-  padding: 22px;
-}
-
-.supabase-card-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.supabase-card p,
-.supabase-card strong,
-.supabase-card span {
-  display: block;
-  margin: 0;
-}
-
-.supabase-card p {
-  color: #667085;
-  font-size: 0.9rem;
-}
-
-.supabase-card strong {
-  margin-top: 4px;
-  color: #101828;
-  font-size: 1.35rem;
-}
-
-.supabase-card > span {
-  max-width: 520px;
-  color: #475467;
-  text-align: right;
-}
-
-.supabase-card.success .metric-icon {
-  color: #087443;
-  background: #e8f7ef;
-}
-
-.supabase-card.failed .metric-icon {
+  gap: 10px;
   color: #b42318;
-  background: #fff0ed;
 }
 
-.supabase-card.not-configured .metric-icon,
-.supabase-card.checking .metric-icon {
-  color: #1265b4;
-  background: #e9f3ff;
+.dashboard-warning p {
+  margin: 0;
+  color: #7a271a;
 }
 
 .metric-icon {
@@ -325,10 +214,16 @@ button:disabled {
 }
 
 .metric-card p,
-.metric-card strong,
-.metric-card span {
+.metric-card strong {
   display: block;
   margin: 0;
+}
+
+.metric-card-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .metric-card p {
@@ -343,19 +238,15 @@ button:disabled {
   line-height: 1.1;
 }
 
-.metric-card span {
-  margin-top: 8px;
-  color: #667085;
-  font-size: 0.85rem;
+.metric-card strong span {
+  margin-left: 4px;
+  color: #475467;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
-.wide-panel {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 150px;
-  padding: 24px;
+.metric-card .primary-button {
+  margin-top: auto;
 }
 
 h2,
@@ -376,7 +267,6 @@ h3 {
   font-size: 1rem;
 }
 
-.wide-panel p,
 .panel-heading p {
   margin-bottom: 0;
   color: #667085;
