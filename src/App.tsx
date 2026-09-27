@@ -1668,7 +1668,7 @@ function Review({
 
             {selectedPhoto && (
               <label className="selected-photo-type-control">
-                撮影種別
+                写真分類
                 <select
                   value={getDraftPhotoType(selectedPhoto)}
                   onChange={(event) => updatePhotoTypeDraft(selectedPhoto.id, event.target.value)}
@@ -1787,7 +1787,7 @@ function Review({
               />
             </label>
             <label>
-              撮影方法
+              撮影法
               <select
                 value={form.photo_protocol}
                 onChange={(event) => updateFormValue("photo_protocol", event.target.value)}
@@ -1845,12 +1845,12 @@ function Review({
             {staffWarning && <p className="staff-load-message warning">{staffWarning}</p>}
           </section>
           <section className="metadata-section photo-standard-section">
-            <h3>撮影基準</h3>
+            <h3>写真構成チェック</h3>
             <div className="photo-type-check-panel">
               {selectedPhotoProtocol.value === "partial" ? (
                 <p className="photo-type-check-message">部分撮影として確認します</p>
               ) : selectedPhotoProtocol.value === "other" ? (
-                <p className="photo-type-check-message">その他の撮影方法として確認します</p>
+                <p className="photo-type-check-message">その他の撮影法として確認します</p>
               ) : photoTypeCheck.missingRequiredTypes.length === 0 ? (
                 <p className="photo-type-check-message complete">
                   ✓ {selectedPhotoProtocol.label}の基本写真が揃っています
@@ -2285,7 +2285,7 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
                 <dd>{selectedGroup.photos.length}枚</dd>
               </div>
               <div>
-                <dt>撮影方法</dt>
+                <dt>撮影法</dt>
                 <dd>{getPhotoProtocolLabel(selectedGroup.photo_protocol)}</dd>
               </div>
               <div>
@@ -2303,11 +2303,11 @@ function ExportView({ onOpenReview }: { onOpenReview: (groupId: string) => void 
             </dl>
             {selectedExportPhotoTypeCheck && (
               <div className="export-photo-check-panel">
-                <strong>撮影基準チェック</strong>
+                <strong>写真構成チェック</strong>
                 {selectedExportPhotoTypeCheck.protocol.value === "partial" ? (
                   <p className="photo-type-check-message">部分撮影として確認します。不足判定は行いません。</p>
                 ) : selectedExportPhotoTypeCheck.protocol.value === "other" ? (
-                  <p className="photo-type-check-message">その他の撮影方法として確認します。不足判定は行いません。</p>
+                  <p className="photo-type-check-message">その他の撮影法として確認します。不足判定は行いません。</p>
                 ) : selectedExportPhotoTypeCheck.missingRequiredTypes.length === 0 ? (
                   <p className="photo-type-check-message complete">
                     {selectedExportPhotoTypeCheck.protocol.label}の基本写真が揃っています
@@ -2653,7 +2653,7 @@ function SearchView({ onOpenReview }: { onOpenReview: (groupId: string, status: 
                     <dd>{formatDate(group.shooting_date)}</dd>
                   </div>
                   <div>
-                    <dt>撮影方法</dt>
+                    <dt>撮影法</dt>
                     <dd>{getPhotoProtocolLabel(group.photo_protocol)}</dd>
                   </div>
                   <div>
