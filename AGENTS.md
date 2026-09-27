@@ -97,6 +97,19 @@ The intended workflow is:
 - Existing exported files must not be deleted or overwritten silently.
 - If a change could affect original image handling, inspect the relevant code carefully before editing.
 
+## Automatic Import and Background Processing Rules
+
+- Treat camera SD cards and other approved removable source media as read-only.
+- Never modify, delete, rename, overwrite, or move original files on source media.
+- Automatic import must create a 保全コピー in managed local storage before downstream processing.
+- Verify the preservation copy using appropriate checks such as file size and/or hash comparison before treating import as complete.
+- After preservation-copy verification, later processing should not depend on the source media remaining connected.
+- Background organization may continue without constant user interaction, including overnight.
+- Background organization may analyze QR/barcodes, extract patient ID candidates, create patient photo set candidates, classify photo types, and calculate classification confidence.
+- Background organization must not automatically perform 確認完了.
+- Background organization must not automatically perform 書き出し.
+- Uncertain or incomplete results should remain 写真確認待ち or 要整理写真 for human review.
+
 ## Human Oversight Rules
 
 - Automatic classification is assistive only.
